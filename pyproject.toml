@@ -1,0 +1,24 @@
+[project]
+name = "fakturenn"
+version = "0.0.1"
+description = ""
+authors = [
+    {name = "tresorerie@younhasolena.bzh"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4 (>=4.13.4,<5.0.0)",
+    "lxml (>=6.0.0,<7.0.0)",
+    "requests (>=2.32.4,<3.0.0)",
+    "selenium (>=4.34.2,<5.0.0)",
+    "google-auth (>=2.40.3,<3.0.0)",
+    "google-auth-oauthlib (>=1.2.2,<2.0.0)",
+    "google-auth-httplib2 (>=0.2.0,<0.3.0)",
+    "google-api-python-client (>=2.177.0,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

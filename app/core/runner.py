@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import os
-import re
 import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import datetime
 
 from app.sources.gmail_manager import GmailManager
 from app.core.google_sheets import GoogleSheetsConfigLoader, FakturennConfigRow
@@ -12,6 +11,17 @@ from app.sources.free import FreeInvoiceDownloader
 from app.sources.free_mobile import FreeMobileInvoiceDownloader
 from app.sources.invoice import Invoice
 from app.export.paheko import PahekoClient
+
+# Helpers
+from app.core.date_utils import (
+    extract_month_from_invoice_date,
+    parse_date_label_to_date,
+)
+from app.core.paheko_helpers import (
+    PahekoMapping,
+    parse_transaction_fields,
+    build_paheko_lines_if_needed,
+)
 
 
 logging.basicConfig(
@@ -21,213 +31,10 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class PahekoMapping:
-    type: str
-    label_template: str
-    debit: str
-    credit: str
-
-    def parse(
-        self,
-    ) -> Tuple[Optional[str], Optional[float], Optional[str], Optional[str]]:
-        # Parsing to be done at usage time; this dataclass mainly stores raw values
-        return None, None, None, None
-
-
-def parse_transaction_field(tx_field: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Parse a paheko_transaction like "626:debit" to (account_debit, account_credit)
-    - Accepts multiple entries separated by newlines/commas/semicolons.
-    - Returns the first debit and the first credit accounts found.
-    """
-    if not tx_field:
-        return None, None
-
-    debit_account: Optional[str] = None
-    credit_account: Optional[str] = None
-
-    # Split on newlines, commas, or semicolons
-    parts = re.split(r"[\r\n;,]+", tx_field)
-    for raw in parts:
-        part = raw.strip()
-        if not part:
-            continue
-        m = re.match(r"\s*([0-9A-Za-z]+)\s*:\s*(debit|credit)\s*$", part)
-        if not m:
-            continue
-        account = m.group(1)
-        side = m.group(2)
-        if side == "debit" and debit_account is None:
-            debit_account = account
-        elif side == "credit" and credit_account is None:
-            credit_account = account
-        # Stop early if we have both
-        if debit_account and credit_account:
-            break
-
-    return debit_account, credit_account
-
-
-def parse_transaction_fields(
-    debit_field: str, credit_field: str
-) -> Tuple[List[str], List[str]]:
-    """
-    Split debit and credit account lists from two separate fields.
-    Accepts separators: newlines, commas, semicolons. Returns ordered lists.
-    """
-
-    def split_accounts(value: str) -> List[str]:
-        if not value:
-            return []
-        parts = re.split(r"[\r\n;,]+", value)
-        return [p.strip() for p in parts if p and p.strip()]
-
-    return split_accounts(debit_field), split_accounts(credit_field)
-
-
-def format_label(template: str, context: Dict[str, str]) -> str:
-    label = template
-    for key, value in context.items():
-        label = label.replace("{" + key + "}", str(value))
-    return label
-
-
-FRENCH_MONTHS = {
-    "01": "Janvier",
-    "02": "Février",
-    "03": "Mars",
-    "04": "Avril",
-    "05": "Mai",
-    "06": "Juin",
-    "07": "Juillet",
-    "08": "Août",
-    "09": "Septembre",
-    "10": "Octobre",
-    "11": "Novembre",
-    "12": "Décembre",
-}
-
-FRENCH_MONTH_NAMES = {v.lower(): v for v in FRENCH_MONTHS.values()}
-
-# Map lowercased French month name to month number ("01".."12")
-FRENCH_MONTH_NAME_TO_NUM: Dict[str, str] = {
-    name.lower(): num for num, name in FRENCH_MONTHS.items()
-}
-
-
-def extract_month_from_invoice_date(date_label: str) -> str:
-    """Return a month label (French) extracted from a human date string.
-
-    Strategies:
-    - If a French month name appears in the label, return it capitalized as in canonical map
-    - Else if we detect numeric formats like YYYY-MM, YYYY/MM, MM/YYYY, map to French name
-    - Else return the original label (last resort)
-    """
-    if not date_label:
-        return ""
-
-    lower = date_label.lower()
-    for name_lower, canonical in FRENCH_MONTH_NAMES.items():
-        if name_lower in lower:
-            return canonical
-
-    # Try numeric patterns
-    m = re.search(r"(?P<y>\d{4})[-/](?P<m>\d{2})", date_label)
-    if m:
-        num = m.group("m")
-        return FRENCH_MONTHS.get(num, date_label)
-
-    m = re.search(r"(?P<m>\d{2})[-/](?P<y>\d{4})", date_label)
-    if m:
-        num = m.group("m")
-        return FRENCH_MONTHS.get(num, date_label)
-
-    return date_label
-
-
-def parse_date_label_to_date(date_label: str) -> Optional[date]:
-    """Parse various invoice date labels to a concrete date.
-
-    Supported patterns:
-    - "YYYY-MM-DD" -> that exact date
-    - "YYYY-MM" or "YYYY/MM" -> first day of that month
-    - "MM/YYYY" -> first day of that month
-    - French month name + year, e.g. "Janvier 2025" -> first day of that month
-    - Bare year "YYYY" -> January 1st of that year
-    """
-    if not date_label:
-        return None
-
-    txt = date_label.strip()
-
-    # YYYY-MM-DD
-    m = re.search(r"(\d{4})[-/](\d{2})[-/](\d{2})", txt)
-    if m:
-        try:
-            return datetime.strptime(m.group(0).replace("/", "-"), "%Y-%m-%d").date()
-        except Exception:
-            pass
-
-    # YYYY-MM or YYYY/MM
-    m = re.search(r"(\d{4})[-/](\d{2})", txt)
-    if m:
-        y, mm = int(m.group(1)), int(m.group(2))
-        try:
-            return date(y, mm, 1)
-        except Exception:
-            return None
-
-    # MM/YYYY
-    m = re.search(r"(\d{2})[-/](\d{4})", txt)
-    if m:
-        mm, y = int(m.group(1)), int(m.group(2))
-        try:
-            return date(y, mm, 1)
-        except Exception:
-            return None
-
-    # French month name + year (order-insensitive checks)
-    year_match = re.search(r"(\d{4})", txt)
-    if year_match:
-        y = int(year_match.group(1))
-        lower = txt.lower()
-        for name_lower, mm_str in FRENCH_MONTH_NAME_TO_NUM.items():
-            if name_lower in lower:
-                try:
-                    return date(y, int(mm_str), 1)
-                except Exception:
-                    return None
-        # If only year present
-        try:
-            return date(y, 1, 1)
-        except Exception:
-            return None
-
-    return None
-
-
-def build_paheko_lines_if_needed(
-    mapping: PahekoMapping, amount_eur: Optional[float]
-) -> Dict:
-    debit_list, credit_list = parse_transaction_fields(mapping.debit, mapping.credit)
-    first_debit = debit_list[0] if debit_list else None
-    first_credit = credit_list[0] if credit_list else None
-    payload: Dict = {}
-
-    if first_debit and first_credit:
-        if amount_eur is not None:
-            payload.update(
-                {"amount": amount_eur, "debit": first_debit, "credit": first_credit}
-            )
-    elif first_debit or first_credit:
-        if amount_eur is not None:
-            payload.update({"amount": amount_eur})
-            if first_debit:
-                payload["debit"] = first_debit
-            if first_credit:
-                payload["credit"] = first_credit
-
-    return payload
+class EmailSearchCriteria:
+    sender_from: str
+    subject_contains: str
+    max_results: int = 30
 
 
 class FakturennRunner:
@@ -271,7 +78,6 @@ class FakturennRunner:
     def find_unread_matching(
         self, sender_from: str, subject_contains: str, max_results: int = 30
     ) -> List[Dict]:
-        # Gmail query using from and subject
         query = f"is:unread from:{sender_from} subject:'{subject_contains}'"
         return self.gmail.search_emails(query, max_results=max_results) or []
 
@@ -327,7 +133,7 @@ class FakturennRunner:
             import asyncio
 
             if mode == "latest":
-                # Free Mobile exposes only list-all; approximate latest by fetching list and downloading first
+
                 async def run_latest():
                     invoices = await downloader.get_invoices_list()
                     if not invoices:
@@ -375,7 +181,7 @@ class FakturennRunner:
             )
             return None
 
-        label = format_label(mapping.label_template, context)
+        label = mapping.label_template.format(**{k: str(v) for k, v in context.items()})
         debit_list, credit_list = parse_transaction_fields(
             mapping.debit, mapping.credit
         )
@@ -428,9 +234,6 @@ class FakturennRunner:
                 logger.info("Aucun email non lu correspondant")
                 continue
 
-            # Contexte générique pour libellé
-            month = ""
-
             mapping = PahekoMapping(
                 type=cfg.paheko_type,
                 label_template=cfg.paheko_label,
@@ -446,15 +249,13 @@ class FakturennRunner:
 
             # Export one entry per downloaded invoice
             for inv in downloaded_invoices:
-                logger.info(f"Invoice: {inv}")
-                month = extract_month_from_invoice_date(inv.date or "")
+                inv_month_label = extract_month_from_invoice_date(inv.date or "")
                 invoice_id_for_context = inv.invoice_id or ""
                 context = {
                     "invoice_id": invoice_id_for_context,
-                    "month": month,
+                    "month": inv_month_label,
                 }
 
-                # Déterminer l'exercice Paheko correspondant à la date de la facture
                 inv_dt = parse_date_label_to_date(inv.date or "")
                 if not inv_dt:
                     logger.warning(

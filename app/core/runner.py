@@ -3,7 +3,7 @@ import os
 import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, date
 
 from app.sources.gmail_manager import GmailManager
 from app.core.google_sheets import GoogleSheetsConfigLoader, FakturennConfigRow
@@ -81,8 +81,18 @@ class FakturennRunner:
         query = f"is:unread from:{sender_from} subject:'{subject_contains}'"
         return self.gmail.search_emails(query, max_results=max_results) or []
 
+    def _filter_invoices_from_date(
+        self, invoices: List[Invoice], from_date: date
+    ) -> List[Invoice]:
+        filtered: List[Invoice] = []
+        for inv in invoices:
+            inv_dt = parse_date_label_to_date(inv.date or "")
+            if inv_dt and inv_dt >= from_date:
+                filtered.append(inv)
+        return filtered
+
     def run_source(
-        self, source_name: str, mode: str, year: Optional[int]
+        self, source_name: str, from_date: date
     ) -> Tuple[int, int, List[Invoice], List[Invoice]]:
         # Return (total_found, total_downloaded, invoices_found, invoices_downloaded)
         if source_name == "FreeInvoiceDownloader":
@@ -94,28 +104,40 @@ class FakturennRunner:
                 headless=os.getenv("HEADLESS_MODE", "true").lower() == "true",
             )
             try:
+                # 1) Lancer le téléchargement via l'API unifiée from-date
+                from_date_str = from_date.strftime("%Y-%m-%d")
+                try:
+                    _, _ = downloader.download_invoices_from(from_date_str)
+                except Exception as e:
+                    logger.warning(
+                        f"Téléchargement via 'download_invoices_from' a échoué: {e}"
+                    )
+
+                # 2) Construire la liste des factures trouvées (filtrées) sans re-télécharger
                 invoices: List[Invoice] = []
+                current_year = datetime.now().year
+                for y in range(from_date.year, current_year + 1):
+                    try:
+                        invs = downloader.get_invoices_by_year(y)
+                        invoices.extend(invs)
+                    except Exception:
+                        continue
+                invoices = self._filter_invoices_from_date(invoices, from_date)
+
+                # 3) Déterminer celles réellement téléchargées en vérifiant les fichiers existants
                 downloaded_invoices: List[Invoice] = []
-                if mode == "latest":
-                    inv = downloader.get_latest_invoice()
-                    if not inv:
-                        return (0, 0, [], [])
-                    ok = downloader.download_invoice(inv)
-                    invoices = [inv]
-                    if ok:
-                        downloaded_invoices = [inv]
-                    return (1, 1 if ok else 0, invoices, downloaded_invoices)
-                elif mode == "year" and year is not None:
-                    invoices = downloader.get_invoices_by_year(year)
-                    downloaded = 0
-                    for inv in invoices:
-                        if downloader.download_invoice(inv):
-                            downloaded += 1
-                            downloaded_invoices.append(inv)
-                    return (len(invoices), downloaded, invoices, downloaded_invoices)
-                else:
-                    logger.warning(f"Mode inconnu ou année manquante: {mode}")
-                    return (0, 0, [], [])
+                for inv in invoices:
+                    filename = inv.suggested_filename(prefix="Free")
+                    filepath = os.path.join(self.output_dir, filename)
+                    if os.path.exists(filepath):
+                        downloaded_invoices.append(inv)
+
+                return (
+                    len(invoices),
+                    len(downloaded_invoices),
+                    invoices,
+                    downloaded_invoices,
+                )
             finally:
                 downloader.close()
 
@@ -130,36 +152,19 @@ class FakturennRunner:
                 gmail_token_path=os.getenv("GMAIL_TOKEN_PATH", "gmail.json"),
                 output_dir=self.output_dir,
             )
-            import asyncio
-
-            if mode == "latest":
-
-                async def run_latest():
-                    invoices = await downloader.get_invoices_list()
-                    if not invoices:
-                        return (0, 0, [], [])
-                    inv = invoices[0]
-                    ok = downloader.download_invoice(inv)
-                    return (1, 1 if ok else 0, [inv], [inv] if ok else [])
-
-                return asyncio.run(run_latest())
-            elif mode == "year" and year is not None:
-
-                async def run_year():
-                    invoices = await downloader.get_invoices_list()
-                    filtered = [i for i in invoices if str(year) in (i.date or "")]
-                    downloaded = 0
-                    downloaded_invoices: List[Invoice] = []
-                    for inv in filtered:
-                        if downloader.download_invoice(inv):
-                            downloaded += 1
-                            downloaded_invoices.append(inv)
-                    return (len(filtered), downloaded, filtered, downloaded_invoices)
-
-                return asyncio.run(run_year())
-            else:
-                logger.warning(f"Mode inconnu ou année manquante: {mode}")
-                return (0, 0, [], [])
+            try:
+                from_date_str = from_date.strftime("%Y-%m-%d")
+                invoices = downloader.get_invoices_list(from_date=from_date_str)
+                filtered = self._filter_invoices_from_date(invoices, from_date)
+                downloaded = 0
+                downloaded_invoices: List[Invoice] = []
+                for inv in filtered:
+                    if downloader.download_invoice(inv):
+                        downloaded += 1
+                        downloaded_invoices.append(inv)
+                return (len(filtered), downloaded, filtered, downloaded_invoices)
+            finally:
+                downloader.close()
 
         logger.error(f"Source inconnue: {source_name}")
         return (0, 0, [], [])
@@ -241,10 +246,18 @@ class FakturennRunner:
             logger.error(f"Erreur export Paheko: {e}")
             return None
 
-    def run(self, mode: str, year: Optional[int] = None, max_results: int = 30) -> None:
+    def run(self, from_date: str, max_results: int = 30) -> None:
         configs = self.load_config()
         if not configs:
             logger.warning("Aucune configuration à traiter")
+            return
+
+        # Parse from_date
+        parsed_from: Optional[date] = parse_date_label_to_date(from_date)
+        if not parsed_from:
+            logger.error(
+                f"Date invalide pour --from: '{from_date}'. Exemples valides: 2024-01-01, 2024-01, 01/2024, 'Janvier 2024'"
+            )
             return
 
         # Précharger les exercices Paheko si disponible
@@ -276,7 +289,7 @@ class FakturennRunner:
 
             # Run source
             total, downloaded, invoices, downloaded_invoices = self.run_source(
-                cfg.fakturenn_extraction, mode, year
+                cfg.fakturenn_extraction, parsed_from
             )
             logger.info(f"Source exécutée: total={total} téléchargées={downloaded}")
 

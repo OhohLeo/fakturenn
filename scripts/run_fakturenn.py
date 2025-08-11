@@ -34,8 +34,14 @@ def main():
     parser = argparse.ArgumentParser(
         description="Fakturenn Runner: lit la config depuis Google Sheets, écoute la boite mail et télécharge/exporte",
     )
-    parser.add_argument("--mode", choices=["latest", "year"], default="latest")
-    parser.add_argument("--year", type=int, help="Année à traiter si mode=year")
+    # Remplace l'ancien --mode/--year par une date de départ obligatoire
+    parser.add_argument(
+        "--from",
+        dest="from_date",
+        required=False,
+        default=os.getenv("FROM_DATE", "").strip(),
+        help="Date à partir de laquelle récupérer les factures (ex: 2024-01-01, 2024-01, 01/2024, 'Janvier 2024')",
+    )
     parser.add_argument(
         "--max", type=int, default=30, help="Nb maximum d'emails à lire par filtre"
     )
@@ -73,13 +79,13 @@ def main():
 
     args = parser.parse_args()
 
-    if args.mode == "year" and not args.year:
-        parser.error("--year est requis lorsque --mode=year")
-
     if not args.sheets_id:
         parser.error(
             "--sheets-id est requis (ou variable d'environnement SHEETS_SPREADSHEET_ID)"
         )
+
+    if not args.from_date:
+        parser.error("--from est requis (ou variable d'environnement FROM_DATE)")
 
     runner = FakturennRunner(
         sheets_spreadsheet_id=args.sheets_id,
@@ -94,7 +100,7 @@ def main():
         output_dir=args.output_dir,
     )
 
-    runner.run(mode=args.mode, year=args.year, max_results=args.max)
+    runner.run(from_date=args.from_date, max_results=args.max)
 
 
 if __name__ == "__main__":

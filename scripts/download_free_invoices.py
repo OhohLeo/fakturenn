@@ -8,6 +8,7 @@ import os
 import sys
 import logging
 from pathlib import Path
+import argparse
 
 # Ajout du répertoire parent au path pour importer les modules
 sys.path.append(str(Path(__file__).parent.parent))
@@ -50,50 +51,22 @@ def clean_credentials(credential):
     return credential
 
 
-def download_latest_invoice():
-    """Télécharge la dernière facture"""
-    logger.info("=== TÉLÉCHARGEMENT DE LA DERNIÈRE FACTURE ===")
-
-    downloader = FreeInvoiceDownloader(
-        auto_auth=True,
-        login=LOGIN,
-        password=PASSWORD,
-        output_dir=OUTPUT_DIR,
-    )
-
-    success = downloader.download_latest_invoice()
-    if success:
-        logger.info("✅ Dernière facture téléchargée avec succès")
-    else:
-        logger.error("❌ Échec du téléchargement de la dernière facture")
-
-
-def download_invoices_by_year(year):
-    """Télécharge toutes les factures d'une année"""
-    logger.info(f"=== TÉLÉCHARGEMENT DES FACTURES DE {year} ===")
-
-    downloader = FreeInvoiceDownloader(
-        auto_auth=True,
-        login=LOGIN,
-        password=PASSWORD,
-        output_dir=OUTPUT_DIR,
-    )
-
-    total, downloaded = downloader.download_invoices_by_year(year)
-    if downloaded > 0:
-        logger.info(f"✅ {downloaded} factures téléchargées avec succès pour {year}")
-    else:
-        logger.warning(f"❌ Aucune facture n'a pu être téléchargée pour {year}")
-
-
 def main():
     """Fonction principale"""
-    global LOGIN, PASSWORD, OUTPUT_DIR
-
-    # Chargement des variables d'environnement
     load_env_file()
 
-    # Configuration depuis .env
+    parser = argparse.ArgumentParser(
+        description="Télécharge les factures Free à partir d'une date donnée",
+    )
+    parser.add_argument(
+        "--from",
+        dest="from_date",
+        required=False,
+        default=os.getenv("FROM_DATE", "").strip(),
+        help="Date à partir de laquelle récupérer les factures (ex: 2024-01-01, 2024-01, 01/2024, 'Janvier 2024')",
+    )
+    args = parser.parse_args()
+
     LOGIN = os.getenv("FREE_LOGIN", "fbx12345678")
     PASSWORD = os.getenv("FREE_PASSWORD", "votre_mot_de_passe")
     OUTPUT_DIR = os.getenv("OUTPUT_DIR", "factures_free")
@@ -111,30 +84,28 @@ def main():
         logger.info("3. OUTPUT_DIR: Répertoire de sortie (optionnel)")
         return
 
-    # Menu interactif
-    print("\n=== TÉLÉCHARGEUR DE FACTURES FREE ===")
-    print("1. Télécharger la dernière facture")
-    print("2. Télécharger toutes les factures d'une année")
-    print("3. Quitter")
+    if not args.from_date:
+        logger.error("--from est requis (ou variable d'environnement FROM_DATE)")
+        return
 
-    while True:
-        choice = input("\nChoisissez une option (1-3): ").strip()
+    downloader = FreeInvoiceDownloader(
+        auto_auth=True,
+        login=LOGIN,
+        password=PASSWORD,
+        output_dir=OUTPUT_DIR,
+    )
 
-        if choice == "1":
-            download_latest_invoice()
-            break
-        elif choice == "2":
-            try:
-                year = int(input("Entrez l'année (ex: 2025): ").strip())
-                download_invoices_by_year(year)
-            except ValueError:
-                logger.error("Année invalide")
-            break
-        elif choice == "3":
-            logger.info("Au revoir !")
-            break
-        else:
-            print("Option invalide. Veuillez choisir 1, 2 ou 3.")
+    total, downloaded = downloader.download_invoices_from(args.from_date)
+    if downloaded > 0:
+        logger.info(
+            f"✅ {downloaded}/{total} factures téléchargées avec succès (>= {args.from_date})"
+        )
+    else:
+        logger.warning(
+            f"❌ Aucune facture n'a pu être téléchargée à partir de {args.from_date}"
+        )
+
+    downloader.close()
 
 
 if __name__ == "__main__":

@@ -20,8 +20,10 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
 import requests
 from html import unescape
+from datetime import datetime
 
 from app.sources.invoice import Invoice
+from app.core.date_utils import parse_date_label_to_date
 
 # Configuration du logging
 logging.basicConfig(
@@ -394,44 +396,6 @@ class FreeInvoiceDownloader:
             )
             return None
 
-    def get_latest_invoice(self) -> Optional[Invoice]:
-        """
-        Récupère la dernière facture depuis la page "Voir toutes mes factures"
-        """
-        try:
-            # Navigation vers la page de toutes les factures
-            if not self.navigate_to_all_invoices_page():
-                logger.error("Impossible de naviguer vers la page des factures")
-                return None
-
-            # Récupération du contenu de la page
-            page_content = self.driver.page_source
-            soup = BeautifulSoup(page_content, "html.parser")
-
-            # Recherche du conteneur principal des factures
-            content_div = soup.find("div", id="content", class_="monabo mesfactures")
-            if not content_div:
-                logger.error("Conteneur principal des factures non trouvé")
-                return None
-
-            # Recherche de la première facture (la plus récente) dans le conteneur
-            first_invoice = content_div.find("li")
-            if not first_invoice:
-                logger.error("Aucune facture trouvée dans le conteneur")
-                return None
-
-            invoice = self.extract_invoice_info_from_list(first_invoice)
-            if invoice:
-                logger.info(
-                    f"Dernière facture trouvée: {invoice.date} - {invoice.amount_text} - ID: {invoice.invoice_id or 'N/A'}"
-                )
-
-            return invoice
-
-        except Exception as e:
-            logger.error(f"Erreur inattendue: {e}")
-            return None
-
     def get_invoices_by_year(self, year: int) -> List[Invoice]:
         """
         Récupère toutes les factures d'une année spécifique
@@ -448,79 +412,30 @@ class FreeInvoiceDownloader:
 
             logger.info(f"Récupération des factures pour l'année {year}...")
 
-            anchors = soup.find_all(
-                "a",
-                class_="btn_download",
-                title=re.compile(r"^Télécharger votre facture en PDF$"),
-            )
-            if not anchors:
-                anchors = soup.find_all("a", class_="btn_download")
-
             invoices: List[Invoice] = []
-            year_prefix = str(year)
 
-            french_months = {
-                "01": "Janvier",
-                "02": "Février",
-                "03": "Mars",
-                "04": "Avril",
-                "05": "Mai",
-                "06": "Juin",
-                "07": "Juillet",
-                "08": "Août",
-                "09": "Septembre",
-                "10": "Octobre",
-                "11": "Novembre",
-                "12": "Décembre",
-            }
+            # Tenter de cibler le conteneur principal des factures
+            content_div = soup.find("div", id="content", class_="monabo mesfactures")
+            li_candidates = []
+            if content_div:
+                li_candidates = content_div.find_all("li")
+            if not li_candidates:
+                # Fallback: chercher tous les <li> susceptibles de contenir des factures
+                li_candidates = soup.find_all("li")
 
-            for a in anchors:
-                raw_href = a.get("href")
-                if not raw_href:
+            for li in li_candidates:
+                inv = self.extract_invoice_info_from_list(li)
+                if not inv:
                     continue
-
-                href = unescape(raw_href)
-
-                # Extraire le paramètre mois=YYYYMM et filtrer par année recherchée
-                mois_match = re.search(r"[?&]mois=(\d{6})\b", href)
-                if not mois_match:
-                    continue
-                mois_val = mois_match.group(1)
-                if not mois_val.startswith(year_prefix):
-                    continue
-
-                # Construire l'URL absolue de téléchargement
-                if href.startswith("http"):
-                    download_link = href
-                elif href.startswith("/"):
-                    download_link = urljoin(self.invoices_host, href)
+                # Filtrer par année
+                inv_dt = parse_date_label_to_date(inv.date or "")
+                if inv_dt is not None:
+                    if inv_dt.year == year:
+                        invoices.append(inv)
                 else:
-                    download_link = urljoin(self.invoices_host + "/", href)
-
-                # Extraire l'ID de facture si présent
-                invoice_id = None
-                id_match = re.search(r"[?&]no_facture=(\d+)\b", href)
-                if id_match:
-                    invoice_id = id_match.group(1)
-
-                # Construire un libellé de date lisible à partir de YYYYMM
-                month_code = mois_val[4:6]
-                date_text = f"{french_months.get(month_code, month_code)} {year_prefix}"
-
-                invoice = Invoice(
-                    date=date_text,
-                    invoice_id=invoice_id,
-                    amount_text=None,
-                    amount_eur=None,
-                    download_url=download_link,
-                    view_url=None,
-                    source="Free",
-                )
-
-                invoices.append(invoice)
-                logger.info(
-                    f"Facture trouvée: {invoice.date} - ID: {invoice.invoice_id or 'N/A'}"
-                )
+                    # Fallback: si parsing impossible, filtrer par présence du texte de l'année
+                    if str(year) in (inv.date or ""):
+                        invoices.append(inv)
 
             logger.info(f"Total de {len(invoices)} factures trouvées pour {year}")
             return invoices
@@ -614,40 +529,49 @@ class FreeInvoiceDownloader:
             )
             return False
 
-    def download_latest_invoice(self) -> bool:
+    def download_invoices_from(self, from_date: str) -> tuple:
         """
-        Télécharge la dernière facture
-        """
-        invoice = self.get_latest_invoice()
-        if not invoice:
-            logger.error("Impossible de récupérer la dernière facture")
-            return False
+        Télécharge toutes les factures à partir d'une date donnée (incluse).
 
-        return self.download_invoice(invoice)
+        Args:
+            from_date (str): Date de départ (formats supportés: 2024-01-01, 2024-01, 01/2024, "Janvier 2024")
 
-    def download_invoices_by_year(self, year: int) -> tuple:
+        Returns:
+            tuple: (total_candidats, total_téléchargés)
         """
-        Télécharge toutes les factures d'une année
-        """
-        invoices = self.get_invoices_by_year(year)
-
-        if not invoices:
-            logger.warning(f"Aucune facture trouvée pour l'année {year}")
+        parsed_from = parse_date_label_to_date(from_date)
+        if not parsed_from:
+            logger.error(
+                f"Date invalide: '{from_date}'. Exemples: 2024-01-01, 2024-01, 01/2024, 'Janvier 2024'"
+            )
             return 0, 0
 
-        downloaded_count = 0
-        total_count = len(invoices)
+        # Récupérer les factures à partir de l'année de from_date jusqu'à l'année courante
+        current_year = datetime.now().year
+        invoices: List[Invoice] = []
+        for y in range(parsed_from.year, current_year + 1):
+            try:
+                invs = self.get_invoices_by_year(y)
+                invoices.extend(invs)
+            except Exception:
+                continue
 
-        logger.info(f"Début du téléchargement de {total_count} factures pour {year}...")
+        # Filtrer par date réelle
+        filtered: List[Invoice] = []
+        for inv in invoices:
+            inv_dt = parse_date_label_to_date(inv.date or "")
+            if inv_dt and inv_dt >= parsed_from:
+                filtered.append(inv)
 
-        for invoice in invoices:
-            if self.download_invoice(invoice):
-                downloaded_count += 1
+        downloaded = 0
+        for inv in filtered:
+            if self.download_invoice(inv):
+                downloaded += 1
 
         logger.info(
-            f"Téléchargement terminé: {downloaded_count}/{total_count} factures téléchargées pour {year}"
+            f"Téléchargement terminé: {downloaded}/{len(filtered)} factures téléchargées (>= {from_date})"
         )
-        return total_count, downloaded_count
+        return len(filtered), downloaded
 
     def close(self):
         """
@@ -660,7 +584,7 @@ class FreeInvoiceDownloader:
 
 def main():
     """
-    Exemple d'utilisation: téléchargement latest / year
+    Exemple d'utilisation: téléchargement à partir d'une date
     """
 
     env_path = Path(__file__).parent.parent.parent / ".env"
@@ -675,8 +599,7 @@ def main():
     LOGIN = os.getenv("FREE_LOGIN", "fbx12345678")
     PASSWORD = os.getenv("FREE_PASSWORD", "votre_mot_de_passe")
     OUTPUT_DIR = os.getenv("OUTPUT_DIR", "factures_free")
-    MODE = os.getenv("FREE_MODE", "latest")  # "latest" ou "year"
-    YEAR = int(os.getenv("FREE_YEAR", "2025"))
+    FROM_DATE = os.getenv("FROM_DATE", "").strip()
     HEADLESS = os.getenv("HEADLESS_MODE", "true").lower() == "true"
 
     if LOGIN == "fbx12345678" or PASSWORD == "votre_mot_de_passe":
@@ -691,16 +614,15 @@ def main():
         headless=HEADLESS,
     )
 
-    if MODE.lower() == "latest":
-        success = downloader.download_latest_invoice()
-        if not success:
-            logger.error("❌ Échec du téléchargement de la dernière facture")
-    elif MODE.lower() == "year":
-        total, downloaded = downloader.download_invoices_by_year(YEAR)
-        if downloaded == 0:
-            logger.warning(f"❌ Aucune facture n'a pu être téléchargée pour {YEAR}")
-    else:
-        logger.error(f"Mode non reconnu: {MODE}. Utilisez 'latest' ou 'year'")
+    if not FROM_DATE:
+        logger.error("Veuillez définir FROM_DATE (ex: 2024-01-01)")
+        downloader.close()
+        return
+    total, downloaded = downloader.download_invoices_from(FROM_DATE)
+    if downloaded == 0:
+        logger.warning(
+            f"❌ Aucune facture n'a pu être téléchargée à partir de {FROM_DATE}"
+        )
 
     downloader.close()
 

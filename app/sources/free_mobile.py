@@ -16,6 +16,7 @@ from pathlib import Path
 import asyncio
 
 from app.sources.free_mobile_auth import FreeMobileAuthenticator
+from app.sources.invoice import Invoice
 
 
 # Configuration du logging
@@ -180,15 +181,21 @@ class FreeMobileInvoiceDownloader:
             logger.error("Authentification requise mais auto-auth désactivée")
             return False
 
-    def extract_invoice_info(self, invoice_element):
+    def _parse_amount_text(self, amount_text: Optional[str]) -> Optional[float]:
+        if not amount_text:
+            return None
+        # Convert formats like "19,99€" to 19.99
+        txt = amount_text.strip()
+        txt = txt.replace("\xa0", " ").replace("€", "").replace(" ", "")
+        txt = txt.replace(",", ".")
+        try:
+            return float(re.findall(r"[-+]?[0-9]*\.?[0-9]+", txt)[0])
+        except Exception:
+            return None
+
+    def extract_invoice_info(self, invoice_element) -> Optional[Invoice]:
         """
         Extrait les informations d'une facture depuis un élément HTML
-
-        Args:
-            invoice_element: Élément BeautifulSoup contenant les infos de facture
-
-        Returns:
-            dict: Dictionnaire avec les informations de la facture
         """
         try:
             # Extraction de la date (mois/année)
@@ -202,14 +209,7 @@ class FreeMobileInvoiceDownloader:
             amount_text = (
                 amount_element.get_text(strip=True) if amount_element else "0,00€"
             )
-
-            # Extraction du statut de paiement
-            status_element = invoice_element.find("div", class_="bg-green-100")
-            status = (
-                status_element.get_text(strip=True)
-                if status_element
-                else "Statut inconnu"
-            )
+            amount_eur = self._parse_amount_text(amount_text)
 
             # Extraction du lien de téléchargement
             download_link = None
@@ -234,16 +234,17 @@ class FreeMobileInvoiceDownloader:
                 if match:
                     invoice_id = match.group(1)
 
-            return {
-                "date": date_text,
-                "amount": amount_text,
-                "status": status,
-                "invoice_id": invoice_id,
-                "download_url": urljoin(self.base_url, download_link)
+            return Invoice(
+                date=date_text,
+                invoice_id=invoice_id,
+                amount_text=amount_text,
+                amount_eur=amount_eur,
+                download_url=urljoin(self.base_url, download_link)
                 if download_link
                 else None,
-                "view_url": urljoin(self.base_url, view_link) if view_link else None,
-            }
+                view_url=urljoin(self.base_url, view_link) if view_link else None,
+                source="FreeMobile",
+            )
 
         except Exception as e:
             logger.error(
@@ -256,7 +257,7 @@ class FreeMobileInvoiceDownloader:
         Récupère la liste des factures depuis la page Free Mobile (version asynchrone)
 
         Returns:
-            list: Liste des dictionnaires contenant les informations des factures
+            list[Invoice]: Liste des factures
         """
         try:
             # Vérification et authentification si nécessaire
@@ -277,11 +278,11 @@ class FreeMobileInvoiceDownloader:
 
             invoices = []
             for element in invoice_elements:
-                invoice_info = self.extract_invoice_info(element)
-                if invoice_info:
-                    invoices.append(invoice_info)
+                invoice = self.extract_invoice_info(element)
+                if invoice:
+                    invoices.append(invoice)
                     logger.info(
-                        f"Facture trouvée: {invoice_info['date']} - {invoice_info['amount']} - {invoice_info['status']}"
+                        f"Facture trouvée: {invoice.date} - {invoice.amount_text}"
                     )
 
             logger.info(f"Total de {len(invoices)} factures trouvées")
@@ -294,27 +295,19 @@ class FreeMobileInvoiceDownloader:
             logger.error(f"Erreur inattendue: {e}")
             return []
 
-    def download_invoice(self, invoice_info):
+    def download_invoice(self, invoice: Invoice) -> bool:
         """
         Télécharge une facture spécifique
-
-        Args:
-            invoice_info (dict): Informations de la facture
-
-        Returns:
-            bool: True si le téléchargement a réussi, False sinon
         """
-        if not invoice_info.get("download_url"):
+        if not invoice or not invoice.download_url:
             logger.warning(
-                f"Pas d'URL de téléchargement pour la facture {invoice_info.get('date', 'inconnue')}"
+                f"Pas d'URL de téléchargement pour la facture {getattr(invoice, 'date', 'inconnue')}"
             )
             return False
 
         try:
             # Génération du nom de fichier
-            date_str = invoice_info["date"].replace(" ", "_")
-            invoice_id = invoice_info.get("invoice_id", "unknown")
-            filename = f"Free_Mobile_{date_str}_{invoice_id}.pdf"
+            filename = invoice.suggested_filename(prefix="Free_Mobile")
             filepath = os.path.join(self.output_dir, filename)
 
             # Vérification si le fichier existe déjà
@@ -322,18 +315,11 @@ class FreeMobileInvoiceDownloader:
                 logger.info(f"Fichier déjà existant: {filename}")
                 return True
 
-            logger.info(f"Téléchargement de la facture {invoice_info['date']}...")
+            logger.info(f"Téléchargement de la facture {invoice.date}...")
 
             # Téléchargement du PDF
-            response = self.session.get(invoice_info["download_url"])
+            response = self.session.get(invoice.download_url)
             response.raise_for_status()
-
-            # Vérification que c'est bien un PDF
-            content_type = response.headers.get("content-type", "")
-            if "pdf" not in content_type.lower():
-                logger.warning(
-                    f"Le contenu téléchargé n'est pas un PDF (Content-Type: {content_type})"
-                )
 
             # Sauvegarde du fichier
             with open(filepath, "wb") as f:
@@ -344,7 +330,7 @@ class FreeMobileInvoiceDownloader:
 
         except requests.RequestException as e:
             logger.error(
-                f"Erreur lors du téléchargement de la facture {invoice_info.get('date', 'inconnue')}: {e}"
+                f"Erreur lors du téléchargement de la facture {getattr(invoice, 'date', 'inconnue')}: {e}"
             )
             return False
         except Exception as e:
@@ -381,77 +367,28 @@ class FreeMobileInvoiceDownloader:
 
 async def main():
     """
-    Fonction principale - exemple d'utilisation (version asynchrone)
-    Supporte deux modes d'authentification :
-    1. Authentification manuelle avec cookies
-    2. Authentification automatisée avec Selenium + Gmail
+    Exemple d'utilisation asynchrone: télécharge toutes les factures après auto-auth
     """
 
-    # Chargement des variables d'environnement depuis .env
-    def load_env_file():
-        """Charge les variables d'environnement depuis le fichier .env"""
+    env_path = Path(__file__).parent.parent.parent / ".env"
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ[key.strip()] = value.strip().strip("\"'")
 
-        env_path = Path(__file__).parent.parent.parent / ".env"
-
-        if env_path.exists():
-            logger.info(f"Chargement des variables depuis {env_path}")
-            with open(env_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        key, value = line.split("=", 1)
-                        # Nettoyage complet des valeurs
-                        key = key.strip()
-                        value = value.strip().strip("\"'")
-                        # Suppression des caractères invisibles (BOM, espaces, etc.)
-                        value = value.encode("ascii", "ignore").decode("ascii").strip()
-                        os.environ[key] = value
-            logger.info("✅ Variables d'environnement chargées")
-        else:
-            logger.warning(f"Fichier .env non trouvé: {env_path}")
-
-    # Chargement des variables d'environnement
-    load_env_file()
-
-    # Configuration pour l'authentification automatisée depuis .env
     LOGIN = os.getenv("FREE_MOBILE_LOGIN", "12345678")
     PASSWORD = os.getenv("FREE_MOBILE_PASSWORD", "votre_mot_de_passe")
     GMAIL_CREDENTIALS_PATH = os.getenv("GMAIL_CREDENTIALS_PATH", "gmail.json")
     GMAIL_TOKEN_PATH = os.getenv("GMAIL_TOKEN_PATH", "gmail.json")
     OUTPUT_DIR = os.getenv("OUTPUT_DIR", "factures_free")
 
-    # Nettoyage des identifiants
-    def clean_credentials(credential):
-        """Nettoie les identifiants des caractères invisibles"""
-        if credential:
-            # Suppression des caractères invisibles et espaces
-            cleaned = credential.strip()
-            # Suppression des caractères non-ASCII
-            cleaned = cleaned.encode("ascii", "ignore").decode("ascii").strip()
-            return cleaned
-        return credential
-
-    LOGIN = clean_credentials(LOGIN)
-    PASSWORD = clean_credentials(PASSWORD)
-
-    # Vérification des paramètres auto-auth
     if LOGIN == "12345678" or PASSWORD == "votre_mot_de_passe":
         logger.error("Veuillez configurer vos identifiants dans le fichier .env")
-        logger.info("Variables requises dans .env:")
-        logger.info("1. FREE_MOBILE_LOGIN: Votre identifiant Free Mobile (8 chiffres)")
-        logger.info("2. FREE_MOBILE_PASSWORD: Votre mot de passe Free Mobile")
-        logger.info("3. GMAIL_CREDENTIALS_PATH: Chemin vers credentials.json Gmail")
-        logger.info("4. GMAIL_TOKEN_PATH: Chemin vers token.json Gmail")
-        logger.info("5. OUTPUT_DIR: Répertoire de sortie (optionnel)")
-        logger.info("")
-        logger.info("Pour configurer Gmail:")
-        logger.info("1. Allez sur https://console.cloud.google.com")
-        logger.info("2. Créez un projet et activez l'API Gmail")
-        logger.info("3. Créez des credentials OAuth2")
-        logger.info("4. Téléchargez le fichier credentials.json")
         return
 
-    # Création du téléchargeur avec authentification automatique
     downloader = FreeMobileInvoiceDownloader(
         auto_auth=True,
         login=LOGIN,
@@ -461,7 +398,6 @@ async def main():
         output_dir=OUTPUT_DIR,
     )
 
-    # Téléchargement de toutes les factures
     logger.info("Début du téléchargement des factures...")
     total, downloaded = await downloader.download_all_invoices()
 

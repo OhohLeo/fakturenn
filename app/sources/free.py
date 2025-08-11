@@ -21,6 +21,8 @@ from selenium.common.exceptions import TimeoutException
 import requests
 from html import unescape
 
+from app.sources.invoice import Invoice
+
 # Configuration du logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -319,35 +321,41 @@ class FreeInvoiceDownloader:
             logger.error(f"Erreur lors de la navigation vers la page des factures: {e}")
             return False
 
-    def extract_invoice_info_from_list(self, invoice_element) -> Optional[Dict]:
+    def extract_invoice_info_from_list(self, invoice_element) -> Optional[Invoice]:
         """
         Extrait les informations d'une facture depuis la liste complète
-
-        Args:
-            invoice_element: Élément BeautifulSoup contenant les infos de facture
-
-        Returns:
-            dict: Dictionnaire avec les informations de la facture
         """
         try:
             # Extraction de tous les spans
             spans = invoice_element.find_all("span", class_="col")
 
-            # Le premier span contient le lien de téléchargement
-            # Le deuxième span contient la date
-            # Le troisième span (avec class="col last") contient le montant
-
             date_text = "Date inconnue"
             amount_text = "0,00€"
 
             if len(spans) >= 2:
-                # La date est dans le deuxième span
                 date_text = spans[1].get_text(strip=True)
 
-            # Extraction du montant (span avec class="col last")
             amount_element = invoice_element.find("span", class_="col last")
             if amount_element:
                 amount_text = amount_element.get_text(strip=True)
+
+            # Normalisation et extraction du montant en euros (float)
+            amount_eur: Optional[float] = None
+            if amount_text:
+                try:
+                    normalized = (
+                        amount_text.replace("\xa0", " ")
+                        .replace("€", "")
+                        .replace("EUR", "")
+                        .strip()
+                    )
+                    normalized = normalized.replace(" ", "")
+                    normalized = normalized.replace(",", ".")
+                    match = re.search(r"(\d+(?:\.\d{1,2})?)", normalized)
+                    if match:
+                        amount_eur = float(match.group(1))
+                except Exception:
+                    amount_eur = None
 
             # Extraction du lien de téléchargement
             download_link = None
@@ -370,12 +378,15 @@ class FreeInvoiceDownloader:
                 if match:
                     invoice_id = match.group(1)
 
-            return {
-                "date": date_text,
-                "amount": amount_text,
-                "invoice_id": invoice_id,
-                "download_url": download_link if download_link else None,
-            }
+            return Invoice(
+                date=date_text,
+                invoice_id=invoice_id,
+                amount_text=amount_text,
+                amount_eur=amount_eur,
+                download_url=download_link if download_link else None,
+                view_url=None,
+                source="Free",
+            )
 
         except Exception as e:
             logger.error(
@@ -383,12 +394,9 @@ class FreeInvoiceDownloader:
             )
             return None
 
-    def get_latest_invoice(self) -> Optional[Dict]:
+    def get_latest_invoice(self) -> Optional[Invoice]:
         """
         Récupère la dernière facture depuis la page "Voir toutes mes factures"
-
-        Returns:
-            dict: Informations de la dernière facture ou None si non trouvée
         """
         try:
             # Navigation vers la page de toutes les factures
@@ -412,27 +420,21 @@ class FreeInvoiceDownloader:
                 logger.error("Aucune facture trouvée dans le conteneur")
                 return None
 
-            invoice_info = self.extract_invoice_info_from_list(first_invoice)
-            if invoice_info:
+            invoice = self.extract_invoice_info_from_list(first_invoice)
+            if invoice:
                 logger.info(
-                    f"Dernière facture trouvée: {invoice_info['date']} - {invoice_info.get('amount', 'N/A')} - ID: {invoice_info.get('invoice_id', 'N/A')}"
+                    f"Dernière facture trouvée: {invoice.date} - {invoice.amount_text} - ID: {invoice.invoice_id or 'N/A'}"
                 )
 
-            return invoice_info
+            return invoice
 
         except Exception as e:
             logger.error(f"Erreur inattendue: {e}")
             return None
 
-    def get_invoices_by_year(self, year: int) -> List[Dict]:
+    def get_invoices_by_year(self, year: int) -> List[Invoice]:
         """
         Récupère toutes les factures d'une année spécifique
-
-        Args:
-            year (int): Année pour laquelle récupérer les factures
-
-        Returns:
-            list: Liste des dictionnaires contenant les informations des factures
         """
         try:
             # Navigation vers la page de toutes les factures
@@ -446,20 +448,15 @@ class FreeInvoiceDownloader:
 
             logger.info(f"Récupération des factures pour l'année {year}...")
 
-            # Recherche directe de tous les liens de téléchargement de facture
-            # Exemples d'ancre :
-            # <a href="...&mois=202508&no_facture=1397011895" class="btn_download" title="Télécharger votre facture en PDF" target="_blank"></a>
             anchors = soup.find_all(
                 "a",
                 class_="btn_download",
                 title=re.compile(r"^Télécharger votre facture en PDF$"),
             )
-
-            # Fallback si l'attribut title n'est pas strictement présent
             if not anchors:
                 anchors = soup.find_all("a", class_="btn_download")
 
-            invoices: List[Dict] = []
+            invoices: List[Invoice] = []
             year_prefix = str(year)
 
             french_months = {
@@ -510,16 +507,19 @@ class FreeInvoiceDownloader:
                 month_code = mois_val[4:6]
                 date_text = f"{french_months.get(month_code, month_code)} {year_prefix}"
 
-                invoice_info = {
-                    "date": date_text,
-                    "amount": None,
-                    "invoice_id": invoice_id,
-                    "download_url": download_link,
-                }
+                invoice = Invoice(
+                    date=date_text,
+                    invoice_id=invoice_id,
+                    amount_text=None,
+                    amount_eur=None,
+                    download_url=download_link,
+                    view_url=None,
+                    source="Free",
+                )
 
-                invoices.append(invoice_info)
+                invoices.append(invoice)
                 logger.info(
-                    f"Facture trouvée: {invoice_info['date']} - ID: {invoice_info.get('invoice_id', 'N/A')}"
+                    f"Facture trouvée: {invoice.date} - ID: {invoice.invoice_id or 'N/A'}"
                 )
 
             logger.info(f"Total de {len(invoices)} factures trouvées pour {year}")
@@ -529,27 +529,19 @@ class FreeInvoiceDownloader:
             logger.error(f"Erreur inattendue: {e}")
             return []
 
-    def download_invoice(self, invoice_info: Dict) -> bool:
+    def download_invoice(self, invoice: Invoice) -> bool:
         """
         Télécharge une facture spécifique directement via HTTP en utilisant les cookies de session Selenium.
-
-        Args:
-            invoice_info (dict): Informations de la facture
-
-        Returns:
-            bool: True si le téléchargement a réussi, False sinon
         """
-        if not invoice_info.get("download_url") and not invoice_info.get("invoice_id"):
+        if not invoice or (not invoice.download_url and not invoice.invoice_id):
             logger.warning(
-                f"Informations insuffisantes pour télécharger la facture {invoice_info.get('date', 'inconnue')}"
+                f"Informations insuffisantes pour télécharger la facture {getattr(invoice, 'date', 'inconnue')}"
             )
             return False
 
         try:
             # Génération du nom de fichier
-            date_str = invoice_info["date"].replace(" ", "_")
-            invoice_id = invoice_info.get("invoice_id", "unknown")
-            filename = f"Free_{date_str}_{invoice_id}.pdf"
+            filename = invoice.suggested_filename(prefix="Free")
             filepath = os.path.join(self.output_dir, filename)
 
             # Vérification si le fichier existe déjà
@@ -557,13 +549,12 @@ class FreeInvoiceDownloader:
                 logger.info(f"Fichier déjà existant: {filename}")
                 return True
 
-            logger.info(
-                f"Téléchargement direct de la facture {invoice_info['date']}..."
-            )
+            logger.info(f"Téléchargement direct de la facture {invoice.date}...")
 
             # Déterminer l'URL de téléchargement
-            href = invoice_info.get("download_url")
-            if not href:
+            href = invoice.download_url
+            invoice_id = invoice.invoice_id
+            if not href and invoice_id:
                 try:
                     link_el = self._wait_for_element(
                         By.CSS_SELECTOR,
@@ -602,29 +593,11 @@ class FreeInvoiceDownloader:
                 timeout=self.timeout,
             )
 
-            content_type = (
-                response.headers.get("Content-Type", "").lower()
-                if response is not None
-                else ""
-            )
-
             if response.status_code != 200:
                 logger.error(
                     f"Téléchargement direct échoué (status={response.status_code}) pour {invoice_id}"
                 )
                 return False
-
-            # Vérifier le type de contenu (PDF ou binaire)
-            is_pdf_like = (
-                "pdf" in content_type
-                or "octet-stream" in content_type
-                or ("application/" in content_type and href.lower().endswith(".pdf"))
-            )
-
-            if not is_pdf_like:
-                logger.warning(
-                    f"Type de contenu inattendu pour la facture {invoice_id}: {content_type}"
-                )
 
             # Écrire le contenu dans le fichier
             with open(filepath, "wb") as f:
@@ -637,33 +610,24 @@ class FreeInvoiceDownloader:
 
         except Exception as e:
             logger.error(
-                f"Erreur lors du téléchargement direct de la facture {invoice_info.get('date', 'inconnue')}: {e}"
+                f"Erreur lors du téléchargement direct de la facture {getattr(invoice, 'date', 'inconnue')}: {e}"
             )
             return False
 
     def download_latest_invoice(self) -> bool:
         """
         Télécharge la dernière facture
-
-        Returns:
-            bool: True si le téléchargement a réussi, False sinon
         """
-        invoice_info = self.get_latest_invoice()
-        if not invoice_info:
+        invoice = self.get_latest_invoice()
+        if not invoice:
             logger.error("Impossible de récupérer la dernière facture")
             return False
 
-        return self.download_invoice(invoice_info)
+        return self.download_invoice(invoice)
 
     def download_invoices_by_year(self, year: int) -> tuple:
         """
         Télécharge toutes les factures d'une année
-
-        Args:
-            year (int): Année pour laquelle télécharger les factures
-
-        Returns:
-            tuple: (nombre_total, nombre_téléchargées)
         """
         invoices = self.get_invoices_by_year(year)
 
@@ -696,39 +660,18 @@ class FreeInvoiceDownloader:
 
 def main():
     """
-    Fonction principale - exemple d'utilisation
-    Supporte deux modes :
-    1. Téléchargement de la dernière facture
-    2. Téléchargement de toutes les factures d'une année
+    Exemple d'utilisation: téléchargement latest / year
     """
 
-    # Chargement des variables d'environnement depuis .env
-    def load_env_file():
-        """Charge les variables d'environnement depuis le fichier .env"""
+    env_path = Path(__file__).parent.parent.parent / ".env"
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ[key.strip()] = value.strip().strip("\"'")
 
-        env_path = Path(__file__).parent.parent.parent / ".env"
-
-        if env_path.exists():
-            logger.info(f"Chargement des variables depuis {env_path}")
-            with open(env_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        key, value = line.split("=", 1)
-                        # Nettoyage complet des valeurs
-                        key = key.strip()
-                        value = value.strip().strip("\"'")
-                        # Suppression des caractères invisibles (BOM, espaces, etc.)
-                        value = value.encode("ascii", "ignore").decode("ascii").strip()
-                        os.environ[key] = value
-            logger.info("✅ Variables d'environnement chargées")
-        else:
-            logger.warning(f"Fichier .env non trouvé: {env_path}")
-
-    # Chargement des variables d'environnement
-    load_env_file()
-
-    # Configuration depuis .env
     LOGIN = os.getenv("FREE_LOGIN", "fbx12345678")
     PASSWORD = os.getenv("FREE_PASSWORD", "votre_mot_de_passe")
     OUTPUT_DIR = os.getenv("OUTPUT_DIR", "factures_free")
@@ -736,35 +679,10 @@ def main():
     YEAR = int(os.getenv("FREE_YEAR", "2025"))
     HEADLESS = os.getenv("HEADLESS_MODE", "true").lower() == "true"
 
-    # Nettoyage des identifiants
-    def clean_credentials(credential):
-        """Nettoie les identifiants des caractères invisibles"""
-        if credential:
-            # Suppression des caractères invisibles et espaces
-            cleaned = credential.strip()
-            # Suppression des caractères non-ASCII
-            cleaned = cleaned.encode("ascii", "ignore").decode("ascii").strip()
-            return cleaned
-        return credential
-
-    LOGIN = clean_credentials(LOGIN)
-    PASSWORD = clean_credentials(PASSWORD)
-
-    # Vérification des paramètres
     if LOGIN == "fbx12345678" or PASSWORD == "votre_mot_de_passe":
         logger.error("Veuillez configurer vos identifiants dans le fichier .env")
-        logger.info("Variables requises dans .env:")
-        logger.info("1. FREE_LOGIN: Votre identifiant Free (Freebox)")
-        logger.info("2. FREE_PASSWORD: Votre mot de passe Free")
-        logger.info("3. OUTPUT_DIR: Répertoire de sortie (optionnel)")
-        logger.info(
-            "4. FREE_MODE: 'latest' pour dernière facture ou 'year' pour année (optionnel)"
-        )
-        logger.info("5. FREE_YEAR: Année pour le mode 'year' (optionnel)")
-        logger.info("6. HEADLESS_MODE: 'true' pour mode headless (optionnel)")
         return
 
-    # Création du téléchargeur avec authentification automatique
     downloader = FreeInvoiceDownloader(
         auto_auth=True,
         login=LOGIN,
@@ -773,27 +691,17 @@ def main():
         headless=HEADLESS,
     )
 
-    # Téléchargement selon le mode
     if MODE.lower() == "latest":
-        logger.info("Mode: Téléchargement de la dernière facture")
         success = downloader.download_latest_invoice()
-        if success:
-            logger.info("✅ Dernière facture téléchargée avec succès")
-        else:
+        if not success:
             logger.error("❌ Échec du téléchargement de la dernière facture")
     elif MODE.lower() == "year":
-        logger.info(f"Mode: Téléchargement de toutes les factures de {YEAR}")
         total, downloaded = downloader.download_invoices_by_year(YEAR)
-        if downloaded > 0:
-            logger.info(
-                f"✅ {downloaded} factures téléchargées avec succès pour {YEAR}"
-            )
-        else:
+        if downloaded == 0:
             logger.warning(f"❌ Aucune facture n'a pu être téléchargée pour {YEAR}")
     else:
         logger.error(f"Mode non reconnu: {MODE}. Utilisez 'latest' ou 'year'")
 
-    # Fermeture propre des ressources
     downloader.close()
 
 

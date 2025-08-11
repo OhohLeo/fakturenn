@@ -200,6 +200,39 @@ class FakturennRunner:
             if first_credit and not payload.get("credit"):
                 payload["credit"] = first_credit
 
+            # Détection de doublon: vérifier le journal du compte référencé pour une écriture même date/libellé
+            account_code_to_check = first_debit or first_credit
+            if account_code_to_check:
+                try:
+                    journal = self.paheko.get_account_journal(
+                        id_year=id_year, code=account_code_to_check
+                    )
+
+                    def normalize_date(value: object) -> Optional[str]:
+                        if isinstance(value, str):
+                            return value[:10]
+                        if isinstance(value, dict):
+                            inner = value.get("date")  # type: ignore[attr-defined]
+                            if isinstance(inner, str):
+                                return inner[:10]
+                        return None
+
+                    target_date = payload["date"]
+                    for entry in journal or []:
+                        entry_date = normalize_date(entry.get("date"))  # type: ignore[arg-type]
+                        entry_label = (
+                            entry.get("label") if isinstance(entry, dict) else None
+                        )  # type: ignore[arg-type]
+                        if entry_date == target_date and entry_label == label:
+                            logger.info(
+                                f"Écriture déjà présente pour le compte {account_code_to_check} à la date {target_date} avec le libellé '{label}'. Export ignoré."
+                            )
+                            return None
+                except Exception as e:
+                    logger.warning(
+                        f"Impossible de vérifier les doublons sur le journal du compte {account_code_to_check}: {e}"
+                    )
+
             logger.info(f"Création d'une écriture Paheko: {payload}")
             tx = self.paheko.create_transaction(**payload)
             logger.info(f"Transaction Paheko créée: {tx.get('id')}")

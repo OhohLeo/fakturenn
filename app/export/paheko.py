@@ -137,8 +137,9 @@ class PahekoClient:
         url = self._get_api_url("accounting/transaction")
         response = self.session.post(url, json=data)
 
-        if response.status_code == 201:
-            return response.json()
+        if response.status_code in (200, 201):
+            resp = response.json()
+            return {"id": resp.get("id"), "lines": resp.get("lines", []), "raw": resp}
         else:
             error_msg = (
                 f"Erreur lors de la création de la transaction: {response.status_code}"
@@ -353,6 +354,56 @@ class PahekoClient:
         else:
             error_msg = (
                 f"Erreur lors de la récupération des exercices: {response.status_code}"
+            )
+            try:
+                error_data = response.json()
+                if "error" in error_data:
+                    error_msg += f" - {error_data['error']}"
+            except Exception:
+                error_msg += f" - {response.text}"
+            raise requests.RequestException(error_msg)
+
+    def get_account_journal(
+        self,
+        id_year: Union[int, str],
+        code: Optional[str] = None,
+        id_account: Optional[int] = None,
+    ) -> List[Dict]:
+        """
+        Renvoie le journal des écritures d'un compte pour l'exercice indiqué.
+
+        Args:
+            id_year: ID de l'exercice comptable, ou 'current' pour l'exercice ouvert en cours
+            code: Code du compte (ex: '512A', '626')
+            id_account: ID interne du compte
+
+        Returns:
+            Liste des écritures du journal pour le compte
+
+        Raises:
+            ValueError: si ni 'code' ni 'id_account' n'est fourni
+            requests.RequestException: en cas d'erreur HTTP
+        """
+        if code is None and id_account is None:
+            raise ValueError("Paramètre requis: 'code' ou 'id_account'")
+
+        params: Dict[str, Union[str, int]] = {}
+        if code is not None:
+            params["code"] = code
+        if id_account is not None:
+            params["id"] = id_account
+
+        url = self._get_api_url(f"accounting/years/{id_year}/account/journal")
+        response = self.session.get(url, params=params)
+
+        if response.status_code == 200:
+            try:
+                return response.json()
+            except Exception as e:
+                raise requests.RequestException(f"Réponse JSON invalide: {e}")
+        else:
+            error_msg = (
+                f"Erreur lors de la récupération du journal: {response.status_code}"
             )
             try:
                 error_data = response.json()

@@ -36,7 +36,6 @@ class FreeInvoiceDownloader:
     def __init__(
         self,
         output_dir: str = "factures_free",
-        auto_auth: bool = False,
         login: Optional[str] = None,
         password: Optional[str] = None,
         headless: bool = True,
@@ -47,7 +46,6 @@ class FreeInvoiceDownloader:
 
         Args:
             output_dir (str): Répertoire de sortie pour les factures
-            auto_auth (bool): Activer l'authentification automatisée
             login (str, optional): Identifiant Free pour auto-auth
             password (str, optional): Mot de passe Free pour auto-auth
             headless (bool): Mode headless pour le navigateur
@@ -57,7 +55,6 @@ class FreeInvoiceDownloader:
         self.login_url = f"{self.base_url}/login"
         self.account_url = "https://adsl.free.fr"
         self.output_dir = output_dir
-        self.auto_auth = auto_auth
         self.login = login
         self.password = password
         self.timeout = timeout
@@ -153,10 +150,8 @@ class FreeInvoiceDownloader:
         Returns:
             bool: True si l'authentification réussit
         """
-        if not self.auto_auth or not self.login or not self.password:
-            logger.error(
-                "Authentification automatique non configurée ou paramètres manquants"
-            )
+        if not self.login or not self.password:
+            logger.error("Identifiants manquants pour l'authentification automatique")
             return False
 
         try:
@@ -258,12 +253,8 @@ class FreeInvoiceDownloader:
         if self.check_authentication():
             return True
 
-        if self.auto_auth:
-            logger.info("Tentative d'authentification automatique...")
-            return self.authenticate()
-        else:
-            logger.error("Authentification requise mais auto-auth désactivée")
-            return False
+        logger.info("Tentative d'authentification automatique...")
+        return self.authenticate()
 
     def get_page_content(self, url: str) -> Optional[str]:
         """
@@ -607,7 +598,6 @@ def main():
         return
 
     downloader = FreeInvoiceDownloader(
-        auto_auth=True,
         login=LOGIN,
         password=PASSWORD,
         output_dir=OUTPUT_DIR,

@@ -97,7 +97,6 @@ class FakturennRunner:
         # Return (total_found, total_downloaded, invoices_found, invoices_downloaded)
         if source_name == "FreeInvoiceDownloader":
             downloader = FreeInvoiceDownloader(
-                auto_auth=True,
                 login=os.getenv("FREE_LOGIN"),
                 password=os.getenv("FREE_PASSWORD"),
                 output_dir=self.output_dir,
@@ -143,7 +142,6 @@ class FakturennRunner:
 
         if source_name == "FreeMobileInvoiceDownloader":
             downloader = FreeMobileInvoiceDownloader(
-                auto_auth=True,
                 login=os.getenv("FREE_MOBILE_LOGIN"),
                 password=os.getenv("FREE_MOBILE_PASSWORD"),
                 gmail_credentials_path=os.getenv(

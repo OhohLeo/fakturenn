@@ -43,7 +43,6 @@ class FreeMobileInvoiceDownloader:
         user_token: Optional[str] = None,
         selfcare_token: Optional[str] = None,
         output_dir: str = "factures_free",
-        auto_auth: bool = False,
         login: Optional[str] = None,
         password: Optional[str] = None,
         gmail_credentials_path: str = "gmail.json",
@@ -59,7 +58,6 @@ class FreeMobileInvoiceDownloader:
             user_token (str, optional): X_USER_TOKEN cookie
             selfcare_token (str, optional): SELFCARE_TOKEN cookie
             output_dir (str): Répertoire de sortie pour les factures
-            auto_auth (bool): Activer l'authentification automatisée
             login (str, optional): Identifiant Free Mobile (8 chiffres)
             password (str, optional): Mot de passe Free Mobile
             gmail_credentials_path (str): Chemin vers credentials.json Gmail
@@ -70,7 +68,6 @@ class FreeMobileInvoiceDownloader:
         self.base_url = "https://mobile.free.fr"
         self.account_url = f"{self.base_url}/account/v2"
         self.output_dir = output_dir
-        self.auto_auth = auto_auth
         self.login = login
         self.password = password
         self.gmail_credentials_path = gmail_credentials_path
@@ -125,19 +122,16 @@ class FreeMobileInvoiceDownloader:
         self.chrome_options.add_argument("--window-size=1920,1080")
         self.chrome_options.add_argument(f"--user-agent={self.user_agent}")
 
-        # Initialisation du gestionnaire Gmail si auto-auth
-        if self.auto_auth:
-            try:
-                self.gmail_manager = GmailManager(
-                    credentials_path=self.gmail_credentials_path,
-                    token_path=self.gmail_token_path,
-                )
-                logger.info("Gestionnaire Gmail initialisé")
-            except Exception as e:
-                logger.error(
-                    f"Erreur lors de l'initialisation du gestionnaire Gmail: {e}"
-                )
-                # Laisser continuer: l'utilisateur peut avoir fourni des cookies
+        # Initialisation du gestionnaire Gmail (meilleure tentative)
+        try:
+            self.gmail_manager = GmailManager(
+                credentials_path=self.gmail_credentials_path,
+                token_path=self.gmail_token_path,
+            )
+            logger.info("Gestionnaire Gmail initialisé")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'initialisation du gestionnaire Gmail: {e}")
+            # Continuer: l'utilisateur peut avoir fourni des cookies
 
     # ======== Selenium helpers ========
     def _init_driver(self):
@@ -326,9 +320,9 @@ class FreeMobileInvoiceDownloader:
         - Validation et récupération des cookies
         - Application des cookies à la session requests
         """
-        if not (self.auto_auth and self.login and self.password):
+        if not (self.login and self.password):
             logger.error(
-                "Authentification automatique non configurée ou paramètres manquants"
+                "Identifiants Free Mobile manquants pour l'authentification automatique"
             )
             return False
 
@@ -399,11 +393,8 @@ class FreeMobileInvoiceDownloader:
     def ensure_authentication(self) -> bool:
         if self.check_authentication():
             return True
-        if self.auto_auth:
-            logger.info("Tentative d'authentification automatique...")
-            return self.authenticate()
-        logger.error("Authentification requise mais auto-auth désactivée")
-        return False
+        logger.info("Tentative d'authentification automatique...")
+        return self.authenticate()
 
     # ======== Parsing et téléchargement ========
     def _parse_amount_text(self, amount_text: Optional[str]) -> Optional[float]:
@@ -578,7 +569,7 @@ class FreeMobileInvoiceDownloader:
 
 def main():
     """
-    Exemple d'utilisation synchronisée: télécharge toutes les factures après auto-auth
+    Exemple d'utilisation synchronisée: télécharge toutes les factures après authentification automatique
     """
     # Chargement .env
     env_path = Path(__file__).parent.parent.parent / ".env"
@@ -602,7 +593,6 @@ def main():
         return
 
     downloader = FreeMobileInvoiceDownloader(
-        auto_auth=True,
         login=LOGIN,
         password=PASSWORD,
         gmail_credentials_path=GMAIL_CREDENTIALS_PATH,

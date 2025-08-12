@@ -89,7 +89,6 @@ def main():
         return
 
     downloader = FreeInvoiceDownloader(
-        auto_auth=True,
         login=LOGIN,
         password=PASSWORD,
         output_dir=OUTPUT_DIR,

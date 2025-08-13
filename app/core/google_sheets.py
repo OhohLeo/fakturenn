@@ -20,6 +20,7 @@ SHEETS_SCOPES = [
 
 @dataclass
 class FakturennConfigRow:
+    origin: str
     sender_from: str
     subject: str
     fakturenn_extraction: str
@@ -34,7 +35,7 @@ class GoogleSheetsConfigLoader:
     Loads Fakturenn configuration from a Google Sheets spreadsheet.
 
     Expected header (new format only):
-    from | subject | fakturenn_extraction | paheko_type | paheko_label | paheko_debit | paheko_credit
+    origin | from | subject | fakturenn_extraction | paheko_type | paheko_label | paheko_debit | paheko_credit
     """
 
     def __init__(
@@ -114,6 +115,7 @@ class GoogleSheetsConfigLoader:
         # Require header row with new format
         first_row = [normalize(c) for c in values[0]] if values else []
         expected_keys = [
+            "origin",
             "from",
             "subject",
             "fakturenn_extraction",
@@ -125,7 +127,7 @@ class GoogleSheetsConfigLoader:
         header_line = ",".join(first_row)
         if not all(k in header_line for k in expected_keys):
             raise ValueError(
-                "En-tête invalide: le format attendu est 'from, subject, fakturenn_extraction, paheko_type, paheko_label, paheko_debit, paheko_credit'"
+                "En-tête invalide: le format attendu est 'origin, from, subject, fakturenn_extraction, paheko_type, paheko_label, paheko_debit, paheko_credit'"
             )
 
         header_map = {name: first_row.index(name) for name in expected_keys}
@@ -135,6 +137,7 @@ class GoogleSheetsConfigLoader:
             return row[idx].strip() if idx < len(row) else ""
 
         for row in values[1:]:
+            origin = cell(row, "origin")
             sender_from = cell(row, "from")
             subject = cell(row, "subject")
             fakturenn_extraction = cell(row, "fakturenn_extraction")
@@ -145,6 +148,7 @@ class GoogleSheetsConfigLoader:
 
             config_rows.append(
                 FakturennConfigRow(
+                    origin=origin,
                     sender_from=sender_from,
                     subject=subject,
                     fakturenn_extraction=fakturenn_extraction,

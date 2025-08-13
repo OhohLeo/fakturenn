@@ -244,14 +244,28 @@ class FakturennRunner:
             logger.error(f"Erreur export Paheko: {e}")
             return None
 
-    def run(self, from_date: str, max_results: int = 30) -> None:
+    def run(
+        self, from_date: str, max_results: int = 30, origins: Optional[List[str]] = None
+    ) -> None:
         configs = self.load_config()
         if not configs:
             logger.warning("Aucune configuration à traiter")
             return
 
+        # Filter configs by origins if provided
+        if origins:
+            normalized_origins = {o.strip().lower() for o in origins if o.strip()}
+            configs = [
+                c
+                for c in configs
+                if (c.origin or "").strip().lower() in normalized_origins
+            ]
+            if not configs:
+                logger.info("Aucune configuration ne correspond aux origines fournies")
+                return
+
         # Parse from_date
-        parsed_from: Optional[date] = parse_date_label_to_date(from_date)
+        parsed_from: date | None = parse_date_label_to_date(from_date)
         if not parsed_from:
             logger.error(
                 f"Date invalide pour --from: '{from_date}'. Exemples valides: 2024-01-01, 2024-01, 01/2024, 'Janvier 2024'"
@@ -269,7 +283,7 @@ class FakturennRunner:
 
         for cfg in configs:
             logger.info(
-                f"Traitement config: from={cfg.sender_from} subject~='{cfg.subject}' source={cfg.fakturenn_extraction}"
+                f"Traitement config: origin={cfg.origin} from={cfg.sender_from} subject~='{cfg.subject}' source={cfg.fakturenn_extraction}"
             )
             emails = self.find_unread_matching(
                 cfg.sender_from, cfg.subject, max_results
@@ -293,14 +307,16 @@ class FakturennRunner:
 
             # Export one entry per downloaded invoice
             for invoice in downloaded_invoices:
-                date = parse_date_label_to_date(invoice.date or "")
-                date_str = date.strftime("%Y-%m-%d") if date else ""
+                invoice_date = parse_date_label_to_date(invoice.date or "")
+                invoice_date_str = (
+                    invoice_date.strftime("%Y-%m-%d") if invoice_date else ""
+                )
                 inv_month_label = extract_month_from_invoice_date(invoice.date or "")
                 invoice_id_for_context = invoice.invoice_id or ""
                 context = {
                     "invoice_id": invoice_id_for_context,
                     "month": inv_month_label,
-                    "date": date_str,
+                    "date": invoice_date_str,
                 }
 
                 inv_dt = parse_date_label_to_date(invoice.date or "")

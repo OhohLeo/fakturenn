@@ -54,8 +54,8 @@ def main():
     parser.add_argument(
         "--sheets-range",
         required=False,
-        default=os.getenv("SHEETS_RANGE", "Config!A:F"),
-        help="Plage (ex: 'Config!A:F')",
+        default=os.getenv("SHEETS_RANGE", "Config!A:H"),
+        help="Plage (ex: 'Config!A:H')",
     )
     parser.add_argument(
         "--sheets-credentials", default=os.getenv("SHEETS_CREDENTIALS", "google.json")
@@ -77,6 +77,14 @@ def main():
 
     parser.add_argument("--output-dir", default=os.getenv("OUTPUT_DIR", "factures"))
 
+    # New: origins filter, comma-separated
+    parser.add_argument(
+        "--origin",
+        dest="origins",
+        default=os.getenv("ORIGIN", ""),
+        help="Filtrer par origine(s) (séparées par des virgules). Si vide, toutes les origines sont exécutées.",
+    )
+
     args = parser.parse_args()
 
     if not args.sheets_id:
@@ -86,6 +94,13 @@ def main():
 
     if not args.from_date:
         parser.error("--from est requis (ou variable d'environnement FROM_DATE)")
+
+    # Parse origins list if provided
+    origins_list = (
+        [o.strip() for o in args.origins.split(",") if o.strip()]
+        if args.origins
+        else None
+    )
 
     runner = FakturennRunner(
         sheets_spreadsheet_id=args.sheets_id,
@@ -100,7 +115,7 @@ def main():
         output_dir=args.output_dir,
     )
 
-    runner.run(from_date=args.from_date, max_results=args.max)
+    runner.run(from_date=args.from_date, max_results=args.max, origins=origins_list)
 
 
 if __name__ == "__main__":

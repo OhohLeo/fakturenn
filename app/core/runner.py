@@ -347,6 +347,12 @@ class FakturennRunner:
                     )
                     continue
 
+                if invoice.amount_eur is None or invoice.amount_eur <= 0:
+                    logger.warning(
+                        f"Montant de facture invalide ou nul ('{invoice.amount_eur}'), export ignoré"
+                    )
+                    continue
+
                 self.export_to_paheko(
                     mapping,
                     context,

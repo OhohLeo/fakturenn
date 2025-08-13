@@ -135,6 +135,10 @@ class SourceRunner:
                 logger.error("GmailManager non initialisé")
                 return []
 
+            if not extraction_params:
+                logger.error("Extraction params non fournis")
+                return []
+
             query_parts: List[str] = []
             if email_sender_from:
                 query_parts.append(f"from:{email_sender_from}")
@@ -149,24 +153,38 @@ class SourceRunner:
                 logger.info("Aucun email correspondant")
                 return []
 
+            source = None
             pattern = None
-            if extraction_params and isinstance(
-                extraction_params.get("email_html"), str
-            ):
-                try:
-                    raw_pat = str(extraction_params.get("email_html"))
-                    pattern = re.compile(self._convert_named_groups(raw_pat), re.DOTALL)
-                except Exception as e:
-                    logger.warning(f"Regex 'email_html' invalide: {e}")
+            for source_expected, source_actual in {
+                "email_html": "body_html",
+                "email_text": "body_text",
+            }.items():
+                if isinstance(extraction_params.get(source_expected), str):
+                    source = source_actual
+                    pattern = re.compile(
+                        self._convert_named_groups(
+                            extraction_params.get(source_expected)
+                        ),
+                        re.DOTALL,
+                    )
+                    logger.info(f"Regex '{source_expected}' valide: {pattern}")
+                    break
+            if not pattern:
+                logger.error("Aucun pattern valide trouvé")
+                return []
 
             extracted_invoices: List[Invoice] = []
             for email in emails:
-                body_html = email.get("body_html") or ""
+                body = email.get(source) or ""
+                logger.info(f"Body: {body}")
+                date_email = email.get("date") or ""
+                logger.info(f"Date email: {date_email}")
                 if pattern:
                     try:
-                        for m in pattern.finditer(body_html):
+                        for m in pattern.finditer(body):
+                            logger.info(f"Match: {m.groupdict()}")
                             inv_id = m.groupdict().get("invoice_id") or None
-                            date_raw = m.groupdict().get("date") or None
+                            date_raw = m.groupdict().get("date") or date_email
                             amount_text = m.groupdict().get("amount_text") or None
                             date_norm = self._normalize_date_str(date_raw) or ""
                             amount_eur = self._parse_amount_eur(amount_text)

@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from datetime import datetime, date
 
 FRENCH_MONTHS = {
@@ -25,34 +25,92 @@ FRENCH_MONTH_NAME_TO_NUM: Dict[str, str] = {
 }
 
 
-def extract_month_from_invoice_date(date_label: str) -> str:
-    """Return a month label (French) extracted from a human date string.
+def _extract_year_from_text(text: str) -> Optional[int]:
+    m = re.search(r"(\d{4})", text)
+    if not m:
+        return None
+    try:
+        y = int(m.group(1))
+        # Basic sanity check
+        if 1900 <= y <= 2100:
+            return y
+    except Exception:
+        return None
+    return None
 
-    Strategies:
-    - If a French month name appears in the label, return it capitalized as in canonical map
-    - Else if we detect numeric formats like YYYY-MM, YYYY/MM, MM/YYYY, map to French name
-    - Else return the original label (last resort)
+
+def _has_explicit_month(text: str) -> bool:
+    lower = text.lower()
+    if any(name_lower in lower for name_lower in FRENCH_MONTH_NAME_TO_NUM.keys()):
+        return True
+    if re.search(r"(\d{4})[-/](\d{2})", text) or re.search(r"(\d{2})[-/](\d{4})", text):
+        return True
+    return False
+
+
+def extract_month_and_year_from_invoice_date(date_label: str) -> Tuple[str, int]:
+    """Extract a month label (French) and a non-optional year from a human date string.
+
+    Returns a tuple: (month_label, year). The month_label is a French month name in
+    canonical capitalization when a month is explicit, or the original label if the
+    input does not contain an explicit month (to preserve previous behavior). The
+    returned year is always an integer; when no year can be detected, the current
+    year is used as a fallback.
     """
     if not date_label:
-        return ""
+        # No label means no month info; return empty month and current year fallback
+        return "", datetime.now().year
 
+    original = date_label.strip()
+
+    # Try full parsing first
+    dt = None
+    try:
+        dt = parse_date_label_to_date(date_label)
+    except Exception:
+        dt = None
+
+    if dt:
+        if not _has_explicit_month(date_label):
+            # Preserve original label as "month" when only a year is present
+            y = _extract_year_from_text(date_label) or dt.year
+            return original, y
+        month_label = FRENCH_MONTHS.get(f"{dt.month:02d}", "")
+        return month_label, dt.year
+
+    # Fallbacks when we couldn't parse to a date
     lower = date_label.lower()
+
+    # Named French month
     for name_lower, canonical in FRENCH_MONTH_NAMES.items():
         if name_lower in lower:
-            return canonical
+            y = _extract_year_from_text(date_label) or datetime.now().year
+            return canonical, y
 
-    # Try numeric patterns
+    # Numeric formats
     m = re.search(r"(?P<y>\d{4})[-/](?P<m>\d{2})", date_label)
     if m:
         num = m.group("m")
-        return FRENCH_MONTHS.get(num, date_label)
+        month_label = FRENCH_MONTHS.get(num, original)
+        y = int(m.group("y"))
+        return month_label, y
 
     m = re.search(r"(?P<m>\d{2})[-/](?P<y>\d{4})", date_label)
     if m:
         num = m.group("m")
-        return FRENCH_MONTHS.get(num, date_label)
+        month_label = FRENCH_MONTHS.get(num, original)
+        y = int(m.group("y"))
+        return month_label, y
 
-    return date_label
+    # Last resort: keep original label and choose reasonable year
+    y = _extract_year_from_text(date_label) or datetime.now().year
+    return original, y
+
+
+def extract_month_from_invoice_date(date_label: str) -> Tuple[str, Optional[int]]:
+    """Backward-compatible wrapper. Prefer extract_month_and_year_from_invoice_date."""
+    month_label, year = extract_month_and_year_from_invoice_date(date_label)
+    return month_label, year
 
 
 def parse_date_label_to_date(date_label: str) -> Optional[date]:

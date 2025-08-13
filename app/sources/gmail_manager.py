@@ -13,6 +13,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from email.utils import parsedate_to_datetime
 
 # Configuration du logging
 logging.basicConfig(
@@ -47,6 +48,24 @@ class GmailManager:
         self.token_path = token_path
         self.service = None
         self._authenticate()
+
+    def _normalize_header_date(self, header_val: str) -> str:
+        """Normalise une date de header RFC 2822 vers le format YYYY/MM/DD.
+
+        En cas d'échec de parsing, retourne la valeur originale.
+        """
+        if not header_val:
+            return ""
+        try:
+            dt = parsedate_to_datetime(header_val)
+            if not dt:
+                return header_val
+            # Convertit en fuseau local si fourni
+            if dt.tzinfo is not None:
+                dt = dt.astimezone()
+            return dt.strftime("%Y/%m/%d")
+        except Exception:
+            return header_val
 
     def _authenticate(self):
         """Authentification avec l'API Gmail"""
@@ -236,6 +255,7 @@ class GmailManager:
             subject = next((h["value"] for h in headers if h["name"] == "Subject"), "")
             sender = next((h["value"] for h in headers if h["name"] == "From"), "")
             date = next((h["value"] for h in headers if h["name"] == "Date"), "")
+            date_norm = self._normalize_header_date(date)
 
             # Extraction du contenu (texte et HTML)
             bodies = self._extract_email_bodies(message["payload"])
@@ -245,7 +265,7 @@ class GmailManager:
                 "threadId": message.get("threadId", ""),
                 "subject": subject,
                 "sender": sender,
-                "date": date,
+                "date": date_norm,
                 "body_text": bodies.get("text", ""),
                 "body_html": bodies.get("html", ""),
                 "body": bodies.get("text") or bodies.get("html") or "",

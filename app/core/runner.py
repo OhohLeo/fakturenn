@@ -11,7 +11,7 @@ from app.sources.runner import SourceRunner
 
 # Helpers
 from app.core.date_utils import (
-    extract_month_from_invoice_date,
+    extract_month_and_year_from_invoice_date,
     parse_date_label_to_date,
 )
 from app.core.paheko_helpers import (
@@ -216,12 +216,16 @@ class FakturennRunner:
                 invoice_date_str = (
                     invoice_date.strftime("%Y-%m-%d") if invoice_date else ""
                 )
-                inv_month_label = extract_month_from_invoice_date(invoice.date or "")
+                inv_month_label, inv_year = extract_month_and_year_from_invoice_date(
+                    invoice.date or ""
+                )
+                inv_year_str = str(inv_year) if inv_year is not None else ""
                 invoice_id_for_context = invoice.invoice_id or ""
                 context = {
                     "invoice_id": invoice_id_for_context,
                     "month": inv_month_label,
                     "date": invoice_date_str,
+                    "year": inv_year_str,
                 }
 
                 inv_dt = parse_date_label_to_date(invoice.date or "")

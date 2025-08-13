@@ -194,7 +194,7 @@ class FakturennRunner:
             payload = {
                 "id_year": id_year,
                 "label": label,
-                "date": datetime.now().strftime("%Y-%m-%d"),
+                "date": context.get("date", datetime.now().strftime("%Y-%m-%d")),
                 "transaction_type": mapping.type,
             }
             payload.update(build_paheko_lines_if_needed(mapping, amount_eur))
@@ -292,18 +292,21 @@ class FakturennRunner:
             logger.info(f"Source exécutée: total={total} téléchargées={downloaded}")
 
             # Export one entry per downloaded invoice
-            for inv in downloaded_invoices:
-                inv_month_label = extract_month_from_invoice_date(inv.date or "")
-                invoice_id_for_context = inv.invoice_id or ""
+            for invoice in downloaded_invoices:
+                date = parse_date_label_to_date(invoice.date or "")
+                date_str = date.strftime("%Y-%m-%d") if date else ""
+                inv_month_label = extract_month_from_invoice_date(invoice.date or "")
+                invoice_id_for_context = invoice.invoice_id or ""
                 context = {
                     "invoice_id": invoice_id_for_context,
                     "month": inv_month_label,
+                    "date": date_str,
                 }
 
-                inv_dt = parse_date_label_to_date(inv.date or "")
+                inv_dt = parse_date_label_to_date(invoice.date or "")
                 if not inv_dt:
                     logger.warning(
-                        f"Date de facture invalide ou introuvable ('{inv.date}'), export ignoré"
+                        f"Date de facture invalide ou introuvable ('{invoice.date}'), export ignoré"
                     )
                     continue
 
@@ -324,14 +327,14 @@ class FakturennRunner:
 
                 if not matching_year:
                     logger.warning(
-                        f"Aucun exercice Paheko ne couvre la date {inv.date} ({inv_dt}), export ignoré"
+                        f"Aucun exercice Paheko ne couvre la date {invoice.date} ({inv_dt}), export ignoré"
                     )
                     continue
 
                 self.export_to_paheko(
                     mapping,
                     context,
-                    amount_eur=inv.amount_eur,
+                    amount_eur=invoice.amount_eur,
                     id_year=int(matching_year.get("id")),
                 )
 

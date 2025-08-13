@@ -311,7 +311,7 @@ class FreeMobileInvoiceDownloader:
             logger.error(f"Erreur lors de la récupération des cookies: {e}")
             return {}
 
-    def authenticate(self, max_wait_time: int = 120) -> bool:
+    def authenticate(self, max_wait_time: int = 180) -> bool:
         """
         Processus complet d'authentification:
         - Ouverture Selenium, login/mdp
@@ -365,10 +365,8 @@ class FreeMobileInvoiceDownloader:
             logger.error(f"Erreur lors du processus d'authentification: {e}")
             return False
         finally:
-            if self.driver:
-                self.driver.quit()
-                self.driver = None
-                logger.info("Navigateur fermé")
+            # Ne pas fermer le navigateur ici pour permettre des interactions ultérieures
+            pass
 
     # ======== Vérification de session ========
     def check_authentication(self) -> bool:
@@ -395,6 +393,46 @@ class FreeMobileInvoiceDownloader:
             return True
         logger.info("Tentative d'authentification automatique...")
         return self.authenticate()
+
+    def _ensure_driver_authenticated(self) -> bool:
+        """S'assure que le driver Selenium est initialisé et authentifié en réinjectant les cookies de la session HTTP si nécessaire."""
+        try:
+            if not self.driver:
+                self._init_driver()
+                # Ouvrir le domaine pour pouvoir poser des cookies
+                self.driver.get(self.account_url)
+                time.sleep(1)
+                # Injecter les cookies connus de la session requests
+                for cookie in self.session.cookies:
+                    try:
+                        if cookie.domain and "mobile.free.fr" not in cookie.domain:
+                            continue
+                        self.driver.add_cookie(
+                            {
+                                "name": cookie.name,
+                                "value": cookie.value,
+                                "path": cookie.path or "/",
+                            }
+                        )
+                    except Exception:
+                        continue
+            # Naviguer vers la page compte avec cookies en place
+            self.driver.get(self.account_url)
+            time.sleep(2)
+            # Si toujours redirigé vers un login, relancer l'authentification complète
+            if (
+                "login" in self.driver.current_url.lower()
+                or "connexion" in self.driver.current_url.lower()
+            ):
+                logger.info(
+                    "Cookies Selenium invalides, tentative d'authentification complète..."
+                )
+                if not self.authenticate():
+                    return False
+            return True
+        except Exception as e:
+            logger.error(f"Erreur lors de la préparation du driver authentifié: {e}")
+            return False
 
     # ======== Parsing et téléchargement ========
     def _parse_amount_text(self, amount_text: Optional[str]) -> Optional[float]:
@@ -461,19 +499,77 @@ class FreeMobileInvoiceDownloader:
 
     def get_invoices_list(self, from_date: Optional[str] = None) -> List[Invoice]:
         try:
+            # S'assurer de l'authentification (cookies pour HTTP) puis disposer d'un driver prêt
             if not self.ensure_authentication():
                 logger.error("Impossible de s'authentifier")
                 return []
+            if not self._ensure_driver_authenticated():
+                logger.error("Impossible de préparer un driver authentifié")
+                return []
 
-            logger.info("Récupération de la page des factures...")
-            response = self.session.get(self.account_url, timeout=self.timeout)
-            response.raise_for_status()
+            logger.info(
+                "Navigation vers la page des factures (onglet 'Mes factures')..."
+            )
+            # Cliquer sur l'onglet "Mes factures"
+            try:
+                tab_button = self._wait_for_element_clickable(
+                    By.XPATH,
+                    "//button[@role='tab' and @aria-controls='invoices' and contains(normalize-space(.), 'Mes factures')]",
+                    timeout=10,
+                )
+                tab_button.click()
+                time.sleep(1.5)
+            except TimeoutException:
+                # Fallback via texte exact
+                try:
+                    tab_button = self._wait_for_element_clickable(
+                        By.XPATH,
+                        "//button[normalize-space(text())='Mes factures']",
+                        timeout=5,
+                    )
+                    tab_button.click()
+                    time.sleep(1.5)
+                except Exception:
+                    logger.warning("Bouton 'Mes factures' introuvable ou déjà actif")
 
-            soup = BeautifulSoup(response.content, "html.parser")
+            # Cliquer sur "Voir plus" jusqu'à disparition
+            logger.info("Expansion de la liste des factures via 'Voir plus'...")
+            while True:
+                try:
+                    voir_plus_btn = WebDriverWait(self.driver, 5).until(
+                        EC.element_to_be_clickable(
+                            (
+                                By.XPATH,
+                                "//button[.//span[normalize-space(text())='Voir plus']]",
+                            )
+                        )
+                    )
+                    # Vérifier la visibilité réelle
+                    if voir_plus_btn.is_displayed():
+                        self.driver.execute_script(
+                            "arguments[0].scrollIntoView({block: 'center'});",
+                            voir_plus_btn,
+                        )
+                        time.sleep(0.3)
+                        voir_plus_btn.click()
+                        time.sleep(
+                            1.2
+                        )  # Laisser le temps de charger de nouveaux éléments
+                        continue
+                except TimeoutException:
+                    # Plus de bouton visible/clickable
+                    break
+                except Exception as e:
+                    logger.debug(f"Interruption du clic sur 'Voir plus': {e}")
+                    break
+
+            # Récupérer le HTML complet après expansion
+            page_html = self.driver.page_source
+            soup = BeautifulSoup(page_html, "html.parser")
 
             # Recherche des éléments de facture
             invoice_elements = soup.find_all(
-                "li", class_=re.compile(r"flex flex-col.*border.*bg-white")
+                "li", class_=re.compile(r"flex flex-col.*border")
             )
 
             invoices: List[Invoice] = []

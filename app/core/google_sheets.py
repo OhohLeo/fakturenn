@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import os
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
+import json
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -24,6 +25,7 @@ class FakturennConfigRow:
     sender_from: str
     subject: str
     fakturenn_extraction: str
+    fakturenn_extraction_params: Dict[str, Any]
     paheko_type: str
     paheko_label: str
     paheko_debit: str
@@ -35,7 +37,7 @@ class GoogleSheetsConfigLoader:
     Loads Fakturenn configuration from a Google Sheets spreadsheet.
 
     Expected header (new format only):
-    origin | from | subject | fakturenn_extraction | paheko_type | paheko_label | paheko_debit | paheko_credit
+    origin | from | subject | fakturenn_extraction | fakturenn_extraction_params | paheko_type | paheko_label | paheko_debit | paheko_credit
     """
 
     def __init__(
@@ -119,6 +121,7 @@ class GoogleSheetsConfigLoader:
             "from",
             "subject",
             "fakturenn_extraction",
+            "fakturenn_extraction_params",
             "paheko_type",
             "paheko_label",
             "paheko_debit",
@@ -127,7 +130,7 @@ class GoogleSheetsConfigLoader:
         header_line = ",".join(first_row)
         if not all(k in header_line for k in expected_keys):
             raise ValueError(
-                "En-tête invalide: le format attendu est 'origin, from, subject, fakturenn_extraction, paheko_type, paheko_label, paheko_debit, paheko_credit'"
+                "En-tête invalide: le format attendu est 'origin, from, subject, fakturenn_extraction, fakturenn_extraction_params, paheko_type, paheko_label, paheko_debit, paheko_credit'"
             )
 
         header_map = {name: first_row.index(name) for name in expected_keys}
@@ -136,11 +139,32 @@ class GoogleSheetsConfigLoader:
             idx = header_map[name]
             return row[idx].strip() if idx < len(row) else ""
 
+        def parse_params(raw: str) -> Dict[str, Any]:
+            if not raw:
+                return {}
+            txt = raw.strip()
+            # Attempt strict JSON first
+            try:
+                return json.loads(txt)
+            except Exception:
+                pass
+            # Google Sheets may double-escape quotes
+            try:
+                fixed = txt.replace('""', '"')
+                return json.loads(fixed)
+            except Exception:
+                logger.warning(
+                    f"Impossible de parser 'fakturenn_extraction_params' en JSON. Valeur brute conservée en chaîne."
+                )
+                return {}
+
         for row in values[1:]:
             origin = cell(row, "origin")
             sender_from = cell(row, "from")
             subject = cell(row, "subject")
             fakturenn_extraction = cell(row, "fakturenn_extraction")
+            extraction_params_raw = cell(row, "fakturenn_extraction_params")
+            extraction_params = parse_params(extraction_params_raw)
             paheko_type = cell(row, "paheko_type")
             paheko_label = cell(row, "paheko_label")
             paheko_debit = cell(row, "paheko_debit")
@@ -152,6 +176,7 @@ class GoogleSheetsConfigLoader:
                     sender_from=sender_from,
                     subject=subject,
                     fakturenn_extraction=fakturenn_extraction,
+                    fakturenn_extraction_params=extraction_params,
                     paheko_type=paheko_type,
                     paheko_label=paheko_label,
                     paheko_debit=paheko_debit,

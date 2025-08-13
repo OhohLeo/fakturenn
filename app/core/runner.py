@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-import os
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime, date
 
 from app.sources.gmail_manager import GmailManager
 from app.core.google_sheets import GoogleSheetsConfigLoader, FakturennConfigRow
-from app.sources.free import FreeInvoiceDownloader
-from app.sources.free_mobile import FreeMobileInvoiceDownloader
-from app.sources.invoice import Invoice
 from app.export.paheko import PahekoClient
+from app.sources.runner import SourceRunner
 
 # Helpers
 from app.core.date_utils import (
@@ -61,6 +58,9 @@ class FakturennRunner:
             credentials_path=gmail_credentials_path, token_path=gmail_token_path
         )
         self.output_dir = output_dir
+        self.source_runner = SourceRunner(
+            output_dir=self.output_dir, gmail_manager=self.gmail
+        )
 
         # Paheko client optional
         self.paheko: Optional[PahekoClient] = None
@@ -74,98 +74,6 @@ class FakturennRunner:
 
     def load_config(self) -> List[FakturennConfigRow]:
         return self.sheets_loader.fetch_rows()
-
-    def find_unread_matching(
-        self, sender_from: str, subject_contains: str, max_results: int = 30
-    ) -> List[Dict]:
-        query = f"is:unread from:{sender_from} subject:'{subject_contains}'"
-        return self.gmail.search_emails(query, max_results=max_results) or []
-
-    def _filter_invoices_from_date(
-        self, invoices: List[Invoice], from_date: date
-    ) -> List[Invoice]:
-        filtered: List[Invoice] = []
-        for inv in invoices:
-            inv_dt = parse_date_label_to_date(inv.date or "")
-            if inv_dt and inv_dt >= from_date:
-                filtered.append(inv)
-        return filtered
-
-    def run_source(
-        self, source_name: str, from_date: date
-    ) -> Tuple[int, int, List[Invoice], List[Invoice]]:
-        # Return (total_found, total_downloaded, invoices_found, invoices_downloaded)
-        if source_name == "FreeInvoiceDownloader":
-            downloader = FreeInvoiceDownloader(
-                login=os.getenv("FREE_LOGIN"),
-                password=os.getenv("FREE_PASSWORD"),
-                output_dir=self.output_dir,
-                headless=os.getenv("HEADLESS_MODE", "true").lower() == "true",
-            )
-            try:
-                # 1) Lancer le téléchargement via l'API unifiée from-date
-                from_date_str = from_date.strftime("%Y-%m-%d")
-                try:
-                    _, _ = downloader.download_invoices_from(from_date_str)
-                except Exception as e:
-                    logger.warning(
-                        f"Téléchargement via 'download_invoices_from' a échoué: {e}"
-                    )
-
-                # 2) Construire la liste des factures trouvées (filtrées) sans re-télécharger
-                invoices: List[Invoice] = []
-                current_year = datetime.now().year
-                for y in range(from_date.year, current_year + 1):
-                    try:
-                        invs = downloader.get_invoices_by_year(y)
-                        invoices.extend(invs)
-                    except Exception:
-                        continue
-                invoices = self._filter_invoices_from_date(invoices, from_date)
-
-                # 3) Déterminer celles réellement téléchargées en vérifiant les fichiers existants
-                downloaded_invoices: List[Invoice] = []
-                for inv in invoices:
-                    filename = inv.suggested_filename(prefix="Free")
-                    filepath = os.path.join(self.output_dir, filename)
-                    if os.path.exists(filepath):
-                        downloaded_invoices.append(inv)
-
-                return (
-                    len(invoices),
-                    len(downloaded_invoices),
-                    invoices,
-                    downloaded_invoices,
-                )
-            finally:
-                downloader.close()
-
-        if source_name == "FreeMobileInvoiceDownloader":
-            downloader = FreeMobileInvoiceDownloader(
-                login=os.getenv("FREE_MOBILE_LOGIN"),
-                password=os.getenv("FREE_MOBILE_PASSWORD"),
-                gmail_credentials_path=os.getenv(
-                    "GMAIL_CREDENTIALS_PATH", "gmail.json"
-                ),
-                gmail_token_path=os.getenv("GMAIL_TOKEN_PATH", "gmail.json"),
-                output_dir=self.output_dir,
-            )
-            try:
-                from_date_str = from_date.strftime("%Y-%m-%d")
-                invoices = downloader.get_invoices_list(from_date=from_date_str)
-                filtered = self._filter_invoices_from_date(invoices, from_date)
-                downloaded = 0
-                downloaded_invoices: List[Invoice] = []
-                for inv in filtered:
-                    if downloader.download_invoice(inv):
-                        downloaded += 1
-                        downloaded_invoices.append(inv)
-                return (len(filtered), downloaded, filtered, downloaded_invoices)
-            finally:
-                downloader.close()
-
-        logger.error(f"Source inconnue: {source_name}")
-        return (0, 0, [], [])
 
     def export_to_paheko(
         self,
@@ -285,12 +193,6 @@ class FakturennRunner:
             logger.info(
                 f"Traitement config: origin={cfg.origin} from={cfg.sender_from} subject~='{cfg.subject}' source={cfg.fakturenn_extraction}"
             )
-            emails = self.find_unread_matching(
-                cfg.sender_from, cfg.subject, max_results
-            )
-            if not emails:
-                logger.info("Aucun email non lu correspondant")
-                continue
 
             mapping = PahekoMapping(
                 type=cfg.paheko_type,
@@ -299,13 +201,16 @@ class FakturennRunner:
                 credit=cfg.paheko_credit,
             )
 
-            # Run source
-            total, downloaded, invoices, downloaded_invoices = self.run_source(
-                cfg.fakturenn_extraction, parsed_from
+            total, downloaded, invoices, downloaded_invoices = self.source_runner.run(
+                cfg.fakturenn_extraction,
+                parsed_from,
+                email_sender_from=cfg.sender_from,
+                email_subject_contains=cfg.subject,
+                max_results=max_results,
+                extraction_params=getattr(cfg, "fakturenn_extraction_params", {}) or {},
             )
             logger.info(f"Source exécutée: total={total} téléchargées={downloaded}")
 
-            # Export one entry per downloaded invoice
             for invoice in downloaded_invoices:
                 invoice_date = parse_date_label_to_date(invoice.date or "")
                 invoice_date_str = (
@@ -359,10 +264,3 @@ class FakturennRunner:
                     amount_eur=invoice.amount_eur,
                     id_year=int(matching_year.get("id")),
                 )
-
-            # Optionally mark emails as read
-            try:
-                message_ids = [e["id"] for e in emails]
-                self.gmail.mark_as_read(message_ids)
-            except Exception:
-                pass

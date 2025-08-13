@@ -237,8 +237,8 @@ class GmailManager:
             sender = next((h["value"] for h in headers if h["name"] == "From"), "")
             date = next((h["value"] for h in headers if h["name"] == "Date"), "")
 
-            # Extraction du contenu
-            body = self._extract_email_body(message["payload"])
+            # Extraction du contenu (texte et HTML)
+            bodies = self._extract_email_bodies(message["payload"])
 
             email_data = {
                 "id": message_id,
@@ -246,7 +246,9 @@ class GmailManager:
                 "subject": subject,
                 "sender": sender,
                 "date": date,
-                "body": body,
+                "body_text": bodies.get("text", ""),
+                "body_html": bodies.get("html", ""),
+                "body": bodies.get("text") or bodies.get("html") or "",
                 "labels": message.get("labelIds", []),
                 "snippet": message.get("snippet", ""),
                 "internalDate": message.get("internalDate", ""),
@@ -269,20 +271,100 @@ class GmailManager:
             payload (Dict): Payload du message
 
         Returns:
-            str: Contenu du corps de l'email
+            str: Contenu du corps de l'email (texte si possible, sinon HTML)
         """
-        if "body" in payload and payload["body"].get("data"):
-            data = payload["body"]["data"]
-            return base64.urlsafe_b64decode(data).decode("utf-8")
+        bodies = self._extract_email_bodies(payload)
+        return bodies.get("text") or bodies.get("html") or ""
 
-        if "parts" in payload:
-            for part in payload["parts"]:
-                if part["mimeType"] == "text/plain":
-                    if "data" in part["body"]:
-                        data = part["body"]["data"]
-                        return base64.urlsafe_b64decode(data).decode("utf-8")
+    def _extract_email_bodies(self, payload: Dict) -> Dict[str, str]:
+        """
+        Retourne les deux variantes du corps: texte et HTML.
+        """
+        text = ""
+        html = ""
 
-        return ""
+        def walk(part: Dict):
+            nonlocal text, html
+            mime = part.get("mimeType", "")
+            body = part.get("body", {}) or {}
+            data = body.get("data")
+            filename = part.get("filename")
+            if data and not filename:
+                content = base64.urlsafe_b64decode(data).decode(
+                    "utf-8", errors="replace"
+                )
+                if mime == "text/plain" and not text:
+                    text = content
+                elif mime == "text/html" and not html:
+                    html = content
+            for sub in part.get("parts", []) or []:
+                walk(sub)
+
+        walk(payload)
+        return {"text": text, "html": html}
+
+    def download_attachments_from_emails(
+        self, emails: List[Dict[str, Any]], output_dir: str
+    ) -> int:
+        """
+        Télécharge les pièces jointes des emails fournis et log un aperçu du contenu.
+
+        Args:
+            emails (List[Dict]): Liste d'emails (issus de get_email_details/list_emails)
+            output_dir (str): Dossier cible de sauvegarde
+
+        Returns:
+            int: Nombre de pièces jointes sauvegardées
+        """
+        if not getattr(self, "service", None):
+            logger.error(
+                "Service Gmail non initialisé: impossible de télécharger les pièces jointes"
+            )
+            return 0
+
+        service = self.service
+        saved_count = 0
+        for email in emails:
+            try:
+                message_id = email.get("id")
+                if not message_id:
+                    continue
+
+                msg = (
+                    service.users()
+                    .messages()
+                    .get(userId="me", id=message_id, format="full")
+                    .execute()
+                )
+                payload = msg.get("payload", {})
+                parts = payload.get("parts", [])
+
+                for part in parts or []:
+                    filename = part.get("filename")
+                    body = part.get("body", {})
+                    attachment_id = body.get("attachmentId")
+                    if filename and attachment_id:
+                        attachment = (
+                            service.users()
+                            .messages()
+                            .attachments()
+                            .get(userId="me", messageId=message_id, id=attachment_id)
+                            .execute()
+                        )
+                        data = attachment.get("data")
+                        if not data:
+                            continue
+                        file_bytes = base64.urlsafe_b64decode(data)
+                        os.makedirs(output_dir, exist_ok=True)
+                        save_path = os.path.join(output_dir, filename)
+                        with open(save_path, "wb") as f:
+                            f.write(file_bytes)
+                        saved_count += 1
+            except Exception as e:
+                logger.warning(
+                    f"Erreur lors du traitement de l'email '{email.get('id')}': {e}"
+                )
+        return saved_count
 
     def mark_as_read(self, message_ids: List[str]) -> bool:
         """

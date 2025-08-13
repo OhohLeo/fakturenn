@@ -201,7 +201,7 @@ class FakturennRunner:
                 credit=cfg.paheko_credit,
             )
 
-            total, downloaded, invoices, downloaded_invoices = self.source_runner.run(
+            downloaded_invoices = self.source_runner.run(
                 cfg.fakturenn_extraction,
                 parsed_from,
                 email_sender_from=cfg.sender_from,
@@ -209,7 +209,7 @@ class FakturennRunner:
                 max_results=max_results,
                 extraction_params=getattr(cfg, "fakturenn_extraction_params", {}) or {},
             )
-            logger.info(f"Source exécutée: total={total} téléchargées={downloaded}")
+            logger.info(f"Source exécutée: téléchargées={len(downloaded_invoices)}")
 
             for invoice in downloaded_invoices:
                 invoice_date = parse_date_label_to_date(invoice.date or "")
@@ -258,9 +258,12 @@ class FakturennRunner:
                     )
                     continue
 
+                id_year = (
+                    matching_year.get("id") if isinstance(matching_year, dict) else None
+                )
                 self.export_to_paheko(
-                    mapping,
-                    context,
+                    mapping=mapping,
+                    context=context,
                     amount_eur=invoice.amount_eur,
-                    id_year=int(matching_year.get("id")),
+                    id_year=id_year,
                 )

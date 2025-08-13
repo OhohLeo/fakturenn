@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 import re
 
@@ -70,7 +70,7 @@ class SourceRunner:
         email_subject_contains: Optional[str] = None,
         max_results: int = 30,
         extraction_params: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[int, int, List[Invoice], List[Invoice]]:
+    ) -> List[Invoice]:
         if source_name == "FreeInvoice":
             downloader = FreeInvoiceDownloader(
                 login=os.getenv("FREE_LOGIN"),
@@ -104,12 +104,7 @@ class SourceRunner:
                     if os.path.exists(filepath):
                         downloaded_invoices.append(inv)
 
-                return (
-                    len(invoices),
-                    len(downloaded_invoices),
-                    invoices,
-                    downloaded_invoices,
-                )
+                return downloaded_invoices
             finally:
                 downloader.close()
 
@@ -127,20 +122,18 @@ class SourceRunner:
                 from_date_str = from_date.strftime("%Y-%m-%d")
                 invoices = downloader.get_invoices_list(from_date=from_date_str)
                 filtered = self._filter_invoices_from_date(invoices, from_date)
-                downloaded = 0
                 downloaded_invoices: List[Invoice] = []
                 for inv in filtered:
                     if downloader.download_invoice(inv):
-                        downloaded += 1
                         downloaded_invoices.append(inv)
-                return (len(filtered), downloaded, filtered, downloaded_invoices)
+                return downloaded_invoices
             finally:
                 downloader.close()
 
         if source_name == "Gmail":
             if not self.gmail:
                 logger.error("GmailManager non initialisé")
-                return (0, 0, [], [])
+                return []
 
             query_parts: List[str] = []
             if email_sender_from:
@@ -154,7 +147,7 @@ class SourceRunner:
             emails = self.gmail.search_emails(query, max_results=max_results) or []
             if not emails:
                 logger.info("Aucun email correspondant")
-                return (0, 0, [], [])
+                return []
 
             pattern = None
             if extraction_params and isinstance(
@@ -202,7 +195,7 @@ class SourceRunner:
                 extracted_invoices, from_date
             )
 
-            return (len(filtered_invoices), saved, filtered_invoices, filtered_invoices)
+            return filtered_invoices
 
         logger.error(f"Source inconnue: {source_name}")
-        return (0, 0, [], [])
+        return []

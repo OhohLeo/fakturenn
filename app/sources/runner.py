@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 class SourceRunner:
     def __init__(
-        self, output_dir: str, gmail_manager: Optional[GmailManager] = None
+        self,
+        output_dir: str,
+        gmail_manager: Optional[GmailManager] = None,
     ) -> None:
         self.output_dir = output_dir
         self.gmail = gmail_manager

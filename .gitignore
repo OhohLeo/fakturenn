@@ -1,5 +1,4 @@
-gmail.json
-sheets.json
+*.json
 .env
 factures_free/
 __pycache__/

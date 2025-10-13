@@ -154,7 +154,7 @@ class GoogleSheetsConfigLoader:
                 return json.loads(fixed)
             except Exception:
                 logger.warning(
-                    f"Impossible de parser 'fakturenn_extraction_params' en JSON. Valeur brute conservée en chaîne."
+                    "Impossible de parser 'fakturenn_extraction_params' en JSON. Valeur brute conservée en chaîne."
                 )
                 return {}
 

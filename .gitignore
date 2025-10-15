@@ -2,3 +2,6 @@
 .env
 factures_free/
 __pycache__/
+
+#Ignore cursor AI rules
+.cursor/rules/codacy.mdc

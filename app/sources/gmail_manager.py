@@ -325,25 +325,26 @@ class GmailManager:
 
     def download_attachments_from_emails(
         self, emails: List[Dict[str, Any]], output_dir: str
-    ) -> int:
+    ) -> List[str]:
         """
-        Télécharge les pièces jointes des emails fournis et log un aperçu du contenu.
+        Télécharge les pièces jointes des emails fournis.
 
         Args:
             emails (List[Dict]): Liste d'emails (issus de get_email_details/list_emails)
             output_dir (str): Dossier cible de sauvegarde
 
         Returns:
-            int: Nombre de pièces jointes sauvegardées
+            List[str]: Liste des chemins des pièces jointes sauvegardées
         """
         if not getattr(self, "service", None):
             logger.error(
                 "Service Gmail non initialisé: impossible de télécharger les pièces jointes"
             )
-            return 0
+            return []
 
         service = self.service
-        saved_count = 0
+        saved_attachment_paths: List[str] = []
+
         for email in emails:
             try:
                 message_id = email.get("id")
@@ -379,12 +380,15 @@ class GmailManager:
                         save_path = os.path.join(output_dir, filename)
                         with open(save_path, "wb") as f:
                             f.write(file_bytes)
-                        saved_count += 1
+                        saved_attachment_paths.append(save_path)
+                        logger.info(f"Pièce jointe sauvegardée: {save_path}")
             except Exception as e:
                 logger.warning(
                     f"Erreur lors du traitement de l'email '{email.get('id')}': {e}"
                 )
-        return saved_count
+
+        logger.info(f"Total pièces jointes téléchargées: {len(saved_attachment_paths)}")
+        return saved_attachment_paths
 
     def mark_as_read(self, message_ids: List[str]) -> bool:
         """

@@ -15,8 +15,8 @@ from sqlalchemy import (
     Index,
     JSON,
     Date,
-    INET,
 )
+from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 

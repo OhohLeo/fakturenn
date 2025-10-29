@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.security import HTTPBearer, HTTPCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import decode_token
@@ -30,7 +30,7 @@ async def get_db() -> AsyncSession:
 
 
 async def get_current_user(
-    credentials: HTTPAuthCredentials = Depends(security),
+    credentials: HTTPCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Get current authenticated user.

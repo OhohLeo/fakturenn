@@ -4,13 +4,11 @@ import asyncio
 from datetime import timedelta
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from app.db.models import Base, User
-from app.api.main import create_app
-from app.api.auth import hash_password, create_token
+from app.api.auth import hash_password, create_access_token
 
 
 @pytest.fixture(scope="session")
@@ -90,46 +88,12 @@ async def test_admin_user(db_session: AsyncSession) -> User:
 @pytest.fixture
 def test_token(test_user: User) -> str:
     """Create a test JWT token."""
-    return create_token(
-        user_id=test_user.id,
-        expires_in=timedelta(hours=1),
-    )
+    return create_access_token(test_user.id)
 
 
 @pytest.fixture
 def test_admin_token(test_admin_user: User) -> str:
     """Create a test admin JWT token."""
-    return create_token(
-        user_id=test_admin_user.id,
-        expires_in=timedelta(hours=1),
-    )
+    return create_access_token(test_admin_user.id)
 
 
-@pytest.fixture
-def client(db_session: AsyncSession) -> TestClient:
-    """Create a test client.
-
-    Note: This fixture doesn't properly handle async DB operations.
-    Use async_client for async tests or manually override dependencies.
-    """
-
-    async def override_get_db():
-        yield db_session
-
-    app = create_app()
-    # Override dependency would go here if needed
-    return TestClient(app)
-
-
-class AsyncTestClient:
-    """Async test client wrapper for FastAPI."""
-
-    def __init__(self, app, db_session: AsyncSession):
-        """Initialize async test client."""
-        self.app = app
-        self.db_session = db_session
-        self.client = TestClient(app)
-
-    def get_headers(self, token: str) -> dict:
-        """Get authorization headers."""
-        return {"Authorization": f"Bearer {token}"}

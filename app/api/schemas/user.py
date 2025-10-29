@@ -28,6 +28,8 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     language: Optional[str] = None
     timezone: Optional[str] = None
+    role: Optional[str] = None
+    active: Optional[bool] = None
     password: Optional[str] = Field(None, min_length=8)
 
 

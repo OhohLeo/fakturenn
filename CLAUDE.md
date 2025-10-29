@@ -4,178 +4,374 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Fakturenn** is a Python-based automation suite for managing invoicing for a micro-crèche (Youn Ha Solena). It retrieves invoices from various sources (Free, Free Mobile, Gmail), extracts relevant data, and exports accounting entries to Paheko (accounting software).
+**Fakturenn** is a production-ready automation suite for managing invoicing for a micro-crèche (Youn Ha Solena). It provides a REST API with multi-tenant support to retrieve invoices from various sources (Free, Free Mobile, Gmail), extract relevant data, and export to multiple destinations (Paheko accounting, local filesystem, Google Drive).
 
-**Technology Stack**: Python 3.12+, Poetry, Selenium (for web scraping), Google APIs (Sheets & Gmail), requests
+**Technology Stack**: Python 3.12+, uv (package manager), FastAPI, PostgreSQL, NATS JetStream, Vault, Docker, Selenium (for web scraping), Google APIs
 
 ## Development Commands
 
 ### Environment Setup
 ```bash
-# Install dependencies
-poetry install
+# Install dependencies with uv
+uv sync
 
 # Load environment variables from .env file
-# The project looks for .env in the project root with credentials like:
+# The project looks for .env with credentials:
+# VAULT_ADDR, VAULT_ROLE_ID, VAULT_SECRET_ID (Vault setup)
+# DATABASE_URL (PostgreSQL connection)
+# NATS_SERVERS (NATS server URLs)
 # FREE_LOGIN, FREE_PASSWORD, FREE_MOBILE_LOGIN, FREE_MOBILE_PASSWORD
 # GMAIL_CREDENTIALS_PATH, GMAIL_TOKEN_PATH
-# SHEETS_SPREADSHEET_ID, SHEETS_RANGE, SHEETS_CREDENTIALS, SHEETS_TOKEN
-# PAHEKO_BASE_URL, PAHEKO_USER, PAHEKO_PASS
-# FROM_DATE, OUTPUT_DIR, HEADLESS_MODE
 ```
 
-### Running Scripts
+### Running Services
 
 ```bash
-# Main runner - processes invoices based on Google Sheets configuration
-poetry run python scripts/run_fakturenn.py --help
-poetry run fakturenn --help  # Alternative using project.scripts entry point
+# Start all services with Docker Compose
+docker-compose -f deploy/docker-compose.yml up -d
 
-# Download Free (ISP) invoices
-poetry run python scripts/download_free_invoices.py --help
-poetry run python scripts/download_free_invoices.py
+# Run API server
+uv run python -m uvicorn app.api.main:app --reload
 
-# Setup Free Mobile authentication
-poetry run python scripts/setup_free_mobile_auth.py --help
-poetry run python scripts/setup_free_mobile_auth.py
+# Run job coordinator worker
+uv run python scripts/run_job_coordinator.py
 
-# List/process unread Gmail messages
-poetry run python scripts/gmail_unread.py --help
-poetry run python scripts/gmail_unread.py
+# Run source worker
+uv run python scripts/run_source_worker.py
+
+# Run export worker
+uv run python scripts/run_export_worker.py
+
+# Database migrations
+uv run alembic upgrade head
+uv run alembic downgrade -1
 ```
 
 ### Code Quality
 ```bash
 # Lint and format with ruff
-poetry run ruff check .
-poetry run ruff format .
+uv run ruff format .
+uv run ruff check .
+
+# Run tests
+uv run pytest tests/ -v
+uv run pytest tests/ --cov=app  # with coverage
 ```
 
 ## Architecture
 
-### Core Flow (FakturennRunner)
+### Multi-Service Event-Driven Architecture
 
-The main entry point `scripts/run_fakturenn.py` orchestrates the complete workflow:
+Fakturenn uses an event-driven microservices architecture with REST API frontend and async workers:
 
-1. **Load Configuration** from Google Sheets (`app/core/google_sheets.py`)
-   - Reads structured config with columns: `origin`, `from`, `subject`, `fakturenn_extraction`, `fakturenn_extraction_params`, `paheko_type`, `paheko_label`, `paheko_debit`, `paheko_credit`
-   - Each row defines a source to monitor and how to export to Paheko
+```
+User/Client
+    ↓
+FastAPI REST API (app/api/)
+    ↓ (triggers job)
+NATS JetStream (message broker)
+    ↓
+Job Coordinator Worker
+    ├→ Source Worker (concurrent)
+    │  └→ invokes app/sources/
+    └→ Export Worker (concurrent)
+       └→ invokes app/export/
+    ↓
+PostgreSQL (state persistence)
+    ↓
+External Systems (Paheko, Google Drive, Local FS)
+```
 
-2. **Execute Sources** via `SourceRunner` (`app/sources/runner.py`)
-   - Supports multiple source types: `FreeInvoice`, `FreeMobileInvoice`, `Gmail`
-   - Downloads invoices and extracts metadata (date, amount, invoice ID)
+### Core Flow
 
-3. **Export to Paheko** (`app/export/paheko.py`)
-   - Creates accounting transactions via Paheko API
-   - Supports transaction types: EXPENSE, REVENUE, TRANSFER, ADVANCED
-   - Includes duplicate detection by checking account journal
+1. **User creates automation** via REST API (`POST /automations`)
+   - Configure sources (FreeInvoice, FreeMobileInvoice, Gmail)
+   - Configure exports (Paheko, LocalStorage, GoogleDrive)
+   - Define source-export mappings (many-to-many)
+
+2. **User triggers job** via REST API (`POST /automations/{id}/trigger`)
+   - REST endpoint creates Job in database
+   - Publishes `JobStartedEvent` to NATS
+
+3. **Job Coordinator Worker** (`app/workers/job_coordinator.py`)
+   - Subscribes to JobStartedEvent
+   - Loads automation and all active sources
+   - Publishes SourceExecuteEvent for each source
+   - Tracks job progress and publishes JobCompletedEvent/JobFailedEvent
+
+4. **Source Worker** (`app/workers/source_worker.py` - in progress)
+   - Subscribes to SourceExecuteEvent
+   - Executes source-specific extraction (Free/FreeMobile/Gmail)
+   - Downloads PDF and extracts metadata
+   - Publishes ExportExecuteEvent for mapped exports
+
+5. **Export Worker** (`app/workers/export_worker.py` - in progress)
+   - Subscribes to ExportExecuteEvent
+   - Executes export handler (Paheko/LocalStorage/GoogleDrive)
+   - Publishes ExportCompletedEvent/ExportFailedEvent
+   - Stores export history and external reference
 
 ### Key Components
 
-#### Sources (`app/sources/`)
-- **`invoice.py`**: `Invoice` dataclass - universal representation of an invoice
-- **`free.py`**: `FreeInvoiceDownloader` - scrapes Free ISP invoices using Selenium
-- **`free_mobile.py`**: `FreeMobileInvoiceDownloader` - retrieves Free Mobile invoices via Gmail
-- **`gmail_manager.py`**: `GmailManager` - Gmail API wrapper for searching emails, downloading attachments
-- **`runner.py`**: `SourceRunner` - executes source-specific logic, filters by date, extracts data using regex patterns
+#### API (`app/api/`)
+- **`main.py`**: FastAPI application factory with lifecycle hooks
+- **`auth.py`**: JWT token generation/validation with refresh tokens
+- **`dependencies.py`**: Dependency injection (DB session, current user, admin check, Vault client)
+- **`routers/`**: API endpoints for users, automations, sources, exports, mappings, jobs, health
+- **`schemas/`**: Pydantic models for request/response validation
+
+#### Database (`app/db/`)
+- **`models.py`**: SQLAlchemy ORM models (User, Automation, Source, Export, SourceExportMapping, Job, ExportHistory, AuditLog)
+- **`connection.py`**: Async connection manager with session factory
+- **Alembic migrations**: Schema versioning under `migrations/`
+
+#### NATS (`app/nats/`)
+- **`client.py`**: NatsClientWrapper with JetStream support, stream/consumer management
+- **`messages.py`**: Pydantic event schemas (JobStartedEvent, SourceExecuteEvent, ExportExecuteEvent, etc.)
+
+#### Export Handlers (`app/export/`)
+- **`base.py`**: Abstract ExportHandler interface and factory function
+- **`paheko_handler.py`**: Paheko accounting integration with duplicate detection
+- **`local_storage.py`**: Filesystem organization with configurable path templates
+- **`google_drive.py`**: Google Drive backup integration (OAuth hooks)
 
 #### Core (`app/core/`)
-- **`runner.py`**: `FakturennRunner` - main orchestrator connecting Google Sheets config, sources, and Paheko export
-- **`google_sheets.py`**: `GoogleSheetsConfigLoader` - reads configuration from Google Sheets
-- **`paheko_helpers.py`**: Helper functions for parsing debit/credit accounts and building transaction payloads
-- **`date_utils.py`**: Date parsing utilities supporting multiple formats (ISO, French dates, month names)
+- **`vault_client.py`**: Vault client with AppRole authentication and token auto-renewal
+- **`path_template.py`**: Path template rendering system with French month names
+  - Supports variables: `{year}`, `{month}`, `{month_name}`, `{quarter}`, `{date}`, `{invoice_id}`, `{source}`, `{amount}`
+  - Example: `"{year}/{month_name}/[{source}] {invoice_id}.pdf"` → `"2025/Octobre/[Free] INV-001.pdf"`
+- **`logging_config.py`**: Structured JSON logging configuration
 
-#### Export (`app/export/`)
-- **`paheko.py`**: `PahekoClient` - REST API client for Paheko accounting software
-  - Methods: `create_transaction()`, `create_simple_expense()`, `create_simple_revenue()`, `create_transfer()`, `create_advanced_transaction()`
-  - Includes `get_accounting_years()` and `get_account_journal()` for duplicate detection
+#### Workers (`app/workers/`)
+- **`job_coordinator.py`**: Orchestrates job execution and tracks progress
+- **`source_worker.py`**: (in progress) Executes source extraction and publishes export events
+- **`export_worker.py`**: (in progress) Executes export handlers and publishes completion events
+
+#### Sources (`app/sources/`)
+- **`invoice.py`**: `Invoice` dataclass - universal representation
+- **`free.py`**: Free ISP invoice scraper (Selenium)
+- **`free_mobile.py`**: Free Mobile invoice extractor (Gmail)
+- **`gmail_manager.py`**: Gmail API wrapper
+- **`runner.py`**: Source executor with extraction logic
 
 ### Data Flow Example
 
-1. User runs: `poetry run fakturenn --from 2025-01-01 --sheets-id ABC123`
-2. `FakturennRunner` loads config rows from Google Sheets
-3. For each config row:
-   - `SourceRunner.run()` downloads invoices from the specified source
-   - Filters invoices by `from_date`
-   - Extracts structured data (date, amount, ID) using regex patterns from `fakturenn_extraction_params`
-4. For each downloaded invoice:
-   - Matches invoice date to a Paheko accounting year
-   - Builds transaction payload using `PahekoMapping` (label template, debit/credit accounts)
-   - Checks for duplicates in account journal
-   - Creates transaction via `PahekoClient.create_transaction()`
-
-### Gmail Source Extraction
-
-The Gmail source uses regex patterns defined in `fakturenn_extraction_params` (from Google Sheets) to extract invoice data from email bodies. Patterns can target:
-- `email_html`: Match against HTML body (`body_html`)
-- `email_text`: Match against plain text body (`body_text`)
-
-Named capture groups in regex:
-- `(?P<invoice_id>...)`: Extracts invoice identifier
-- `(?P<date>...)`: Extracts invoice date (falls back to email date)
-- `(?P<amount_text>...)`: Extracts amount text (parsed to float)
-
-Note: The code converts JavaScript-style `(?<name>...)` to Python `(?P<name>...)`.
+1. User creates automation with source (Gmail) and exports (Paheko + LocalStorage)
+2. User triggers job via `POST /automations/1/trigger`
+3. API creates Job and publishes JobStartedEvent
+4. Job Coordinator receives event, fetches automation/sources, publishes SourceExecuteEvent
+5. Source Worker receives event, extracts invoices from Gmail, publishes ExportExecuteEvent
+6. Export Worker receives event twice (for Paheko and LocalStorage), exports PDFs
+7. Workers publish ExportCompletedEvent for each, Coordinator aggregates and publishes JobCompletedEvent
+8. Job status updated to "completed", export history recorded with external references
 
 ## Configuration
 
-### Google Sheets Format
+### API-Based Configuration
 
-Expected columns in the config sheet:
-- `origin`: Logical source name (used for filtering with `--origin`)
-- `from`: Email sender (for Gmail source)
-- `subject`: Email subject filter (for Gmail source)
-- `fakturenn_extraction`: Source type (`FreeInvoice`, `FreeMobileInvoice`, `Gmail`)
-- `fakturenn_extraction_params`: JSON with extraction config (e.g., regex patterns for Gmail)
-- `paheko_type`: Transaction type (`EXPENSE`, `REVENUE`, `TRANSFER`, `ADVANCED`)
-- `paheko_label`: Label template with placeholders: `{invoice_id}`, `{month}`, `{date}`, `{year}`
-- `paheko_debit`: Debit account(s), comma/newline separated
-- `paheko_credit`: Credit account(s), comma/newline separated
+Configuration is now managed through REST API endpoints:
+
+1. **Create User** (`POST /auth/register`)
+   - Username and password for authentication
+   - Language (fr/en) and timezone preferences
+
+2. **Create Automation** (`POST /automations`)
+   - Name and description
+   - Active status
+   - Schedule (cron expression, optional)
+   - From-date rule (optional)
+
+3. **Create Sources** (`POST /sources`)
+   - Assign to automation
+   - Type: `FreeInvoice`, `FreeMobileInvoice`, or `Gmail`
+   - For Gmail: email_sender_from, email_subject_contains
+   - Extraction params (JSON): regex patterns, extraction logic
+   - Max results per execution (default 30)
+
+4. **Create Exports** (`POST /exports`)
+   - Assign to automation
+   - Type: `Paheko`, `LocalStorage`, or `GoogleDrive`
+   - Configuration (JSON):
+     - **Paheko**: `paheko_type`, `label_template`, `debit`, `credit`, `base_url`
+     - **LocalStorage**: `base_path`, `path_template`, `create_directories`
+     - **GoogleDrive**: `folder_id`, `name_template`
+
+5. **Create Mappings** (`POST /mappings`)
+   - Connect sources to exports (many-to-many)
+   - Priority (execution order)
+   - Conditions (JSON, optional filtering)
+
+### Path Template Variables
+
+LocalStorage exports support flexible path organization via template variables:
+
+```
+{year}          → 2025
+{month}         → 10 (zero-padded)
+{month_name}    → Octobre (French name)
+{quarter}       → Q4
+{date}          → 2025-10-29
+{invoice_id}    → INV-001
+{source}        → Free
+{amount}        → 99.99
+{filename}      → facture.pdf
+```
+
+Example templates:
+- `{year}/{month}/{filename}` → `2025/10/facture.pdf`
+- `{year}/{month_name}/{source}_{invoice_id}.pdf` → `2025/Octobre/Free_INV-001.pdf`
+- `{year}/Q{quarter}/{invoice_id}.pdf` → `2025/Q4/INV-001.pdf`
 
 ### Environment Variables
 
-All scripts support loading from `.env` file and command-line arguments. Key variables:
-- `FREE_LOGIN`, `FREE_PASSWORD`: Free ISP credentials
-- `FREE_MOBILE_LOGIN`, `FREE_MOBILE_PASSWORD`: Free Mobile credentials
-- `GMAIL_CREDENTIALS_PATH`, `GMAIL_TOKEN_PATH`: Gmail OAuth credentials
-- `SHEETS_SPREADSHEET_ID`, `SHEETS_RANGE`: Google Sheets config location
-- `SHEETS_CREDENTIALS`, `SHEETS_TOKEN`: Sheets OAuth credentials
-- `PAHEKO_BASE_URL`, `PAHEKO_USER`, `PAHEKO_PASS`: Paheko API credentials
-- `FROM_DATE`: Default start date for invoice retrieval
-- `OUTPUT_DIR`: Directory for downloaded invoices (default: `factures/`)
-- `HEADLESS_MODE`: Run Selenium in headless mode (default: `true`)
+Key variables loaded from `.env`:
+
+**Infrastructure**:
+- `VAULT_ADDR`: HashiCorp Vault address (e.g., `http://localhost:8200`)
+- `VAULT_ROLE_ID`: AppRole role ID
+- `VAULT_SECRET_ID`: AppRole secret ID
+- `DATABASE_URL`: PostgreSQL connection (e.g., `postgresql+asyncpg://user:pass@localhost/dbname`)
+- `NATS_SERVERS`: Comma-separated NATS URLs (e.g., `nats://localhost:4222`)
+
+**API**:
+- `JWT_SECRET_KEY`: Secret for JWT signing
+- `JWT_ALGORITHM`: Algorithm for JWT (default: HS256)
+- `JWT_EXPIRATION_HOURS`: Access token lifetime (default: 1)
+
+**Services** (stored in Vault secret/data/fakturenn/):
+- Free ISP: `free_login`, `free_password`
+- Free Mobile: `free_mobile_login`, `free_mobile_password`
+- Gmail: `gmail_credentials`, `gmail_token`
+- Paheko: `base_url`, `username`, `password`
 
 ## Docker Deployment
 
-A local Paheko instance can be deployed using Docker Compose:
+Complete stack deployment with 8 services:
 
 ```bash
 cd deploy
 docker-compose up -d
 ```
 
-This starts Paheko on `http://localhost:8080` using the official `paheko/paheko:1.3.15` image. Configuration is in `deploy/paheko/config.local.php` and data is persisted in a Docker volume.
+### Services
+
+1. **PostgreSQL 16** (`postgres:16-alpine`)
+   - Port: `5432`
+   - Database: `fakturenn`
+   - Volume: `postgres_data`
+
+2. **HashiCorp Vault 1.15** (`vault:1.15`)
+   - Port: `8200`
+   - Backend: File storage in `vault_data`
+   - Dev mode initialization with AppRole
+
+3. **NATS 2.10 with JetStream** (`nats:2.10`)
+   - Port: `4222` (NATS)
+   - Port: `8222` (Management UI)
+   - JetStream enabled by default
+
+4. **FastAPI Application** (`Dockerfile.api`)
+   - Port: `8000`
+   - Health check on `GET /health`
+   - Depends on PostgreSQL, Vault, NATS
+
+5. **Job Coordinator Worker** (`Dockerfile.worker`)
+   - Subscribes to `job.started` events
+   - Orchestrates source and export workers
+
+6. **Source Worker** (`Dockerfile.worker`)
+   - Subscribes to `source.execute` events
+   - Executes source extraction logic
+   - Includes Chromium/ChromeDriver for Selenium
+
+7. **Export Worker** (`Dockerfile.worker`)
+   - Subscribes to `export.execute` events
+   - Executes export handlers
+
+8. **Paheko 1.3.16** (`paheko/paheko:1.3.16`)
+   - Port: `8080`
+   - Configuration: `deploy/paheko/config.local.php`
+   - Database: PostgreSQL via docker-compose
+
+### Health Checks
+
+All services include health checks:
+- PostgreSQL: TCP port check
+- Vault: HTTP status endpoint
+- NATS: TCP port check
+- API: HTTP GET /health
+- Workers: NATS connectivity check
 
 ## Important Patterns
 
-### Date Handling
-- Dates are parsed flexibly using `date_utils.parse_date_label_to_date()`
-- Supports formats: `YYYY-MM-DD`, `YYYY-MM`, `MM/YYYY`, French month names like "Janvier 2024"
-- All dates are normalized to `YYYY-MM-DD` format for Paheko
+### Multi-Tenancy
+- Every resource (automation, source, export, job) belongs to a User
+- API endpoints automatically filter by `current_user.id`
+- Database foreign keys enforce user isolation
+- AuditLog tracks user actions for compliance
 
-### Duplicate Prevention
-Before creating a Paheko transaction, the runner checks the account journal for existing entries with the same date and label. If found, the export is skipped.
+### JWT Authentication
+- Tokens issued on login with exp claim
+- Access tokens valid for configurable period (default 1 hour)
+- Refresh tokens for extending session
+- Bearer token in `Authorization: Bearer <token>` header
+
+### Event-Driven Messaging
+- Jobs are async and state is tracked in database
+- Events published to NATS JetStream for durability
+- Workers subscribe with durable consumers (auto-restart after failure)
+- Negative acknowledgment (nak) triggers message replay
+
+### Paheko Duplicate Detection
+- Before creating transaction, checks account journal
+- Matches on date AND label to prevent duplicates
+- Skipped duplicates logged as `duplicate_skipped` status
+- Enables safe job re-runs
 
 ### Paheko Transaction Types
 - **EXPENSE/REVENUE**: Simple 2-line transactions (amount + debit + credit)
 - **TRANSFER**: Move funds between accounts
 - **ADVANCED**: Multi-line transactions with custom lines array
 
-### Selenium Usage
-Free ISP invoice downloads use Selenium WebDriver in headless mode by default. Configure with `HEADLESS_MODE=false` to debug visually.
+### Path Templating
+- LocalStorage handler uses `path_template.render_path_template()`
+- Variables interpolated from invoice data and context
+- French month names via lookup table
+- Validation ensures all required variables present
+
+### Vault Secrets Management
+- Credentials stored in `secret/data/fakturenn/<service>`
+- AppRole authentication with role_id/secret_id
+- Automatic token renewal before expiration
+- Thread-safe with lock-protected state
+
+### Selenium Web Scraping
+- Free ISP invoice downloads require browser automation
+- Headless mode by default for server environments
+- Chrome/Chromium required (included in worker Docker image)
+- Timeouts and error handling for network failures
+
+## Database Schema
+
+### Core Tables
+- **users**: Multi-tenant users with language/timezone
+- **automations**: Automation orchestrations per user
+- **sources**: Invoice sources (FreeInvoice, FreeMobileInvoice, Gmail)
+- **exports**: Export destinations (Paheko, LocalStorage, GoogleDrive)
+- **source_export_mappings**: Many-to-many with priority and conditions
+- **jobs**: Job execution tracking with status and stats
+- **export_history**: Audit trail with external references
+- **audit_log**: User action tracking for compliance
+
+### Indexes
+- User-scoped queries: `idx_automations_user`, `idx_sources_automation`, `idx_exports_automation`
+- Status queries: `idx_jobs_status`, `idx_export_history_status`
+- Lookups: Unique constraints on `(user_id, automation_name)`, `(source_id, export_id)`
 
 ## API References
 
+- **API Documentation**: `GET /docs` (Swagger UI) or `GET/openapi.json` (OpenAPI schema)
 - **Paheko API**: https://paheko.cloud/api
-- **Google Sheets API**: https://developers.google.com/sheets/api
-- **Gmail API**: https://developers.google.com/gmail/api
+- **NATS**: https://docs.nats.io/
+- **FastAPI**: https://fastapi.tiangolo.com/
+- **SQLAlchemy**: https://sqlalchemy.org/

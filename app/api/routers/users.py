@@ -1,0 +1,9 @@
+"""User management endpoints."""
+
+import logging
+from fastapi import APIRouter
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+# TODO: Implement user management endpoints

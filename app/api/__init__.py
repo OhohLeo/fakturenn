@@ -1,0 +1,1 @@
+"""Fakturenn FastAPI application."""

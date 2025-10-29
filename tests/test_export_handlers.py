@@ -47,6 +47,8 @@ class TestLocalStorageExportHandler:
         """Test successful export."""
         invoice_data = {
             "file_path": str(test_file),
+            "invoice_id": "INV-001",
+            "date": "2025-10-29",
             "amount_eur": 99.99,
         }
         context = {
@@ -96,9 +98,14 @@ class TestLocalStorageExportHandler:
 
         invoice_data = {
             "file_path": str(test_file),
+            "invoice_id": "INV-001",
+            "date": "2025-10-29",
+            "amount_eur": 99.99,
         }
         context = {
             "invoice_id": "INV-001",
+            "date": "2025-10-29",
+            "amount_eur": 99.99,
         }
 
         result = await handler.export(invoice_data, context)
@@ -115,6 +122,9 @@ class TestLocalStorageExportHandler:
         """Test export with missing context."""
         invoice_data = {
             "file_path": str(test_file),
+            "invoice_id": "INV-001",
+            "date": "2025-10-29",
+            "amount_eur": 99.99,
         }
         context = {}  # Missing required context
 
@@ -131,6 +141,9 @@ class TestLocalStorageExportHandler:
         """Test export when source file doesn't exist."""
         invoice_data = {
             "file_path": "/nonexistent/file.pdf",
+            "invoice_id": "INV-001",
+            "date": "2025-10-29",
+            "amount_eur": 99.99,
         }
         context = {
             "invoice_id": "INV-001",

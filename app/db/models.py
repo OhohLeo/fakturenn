@@ -16,7 +16,6 @@ from sqlalchemy import (
     JSON,
     Date,
 )
-from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -247,7 +246,7 @@ class AuditLog(Base):
     resource_type = Column(String(50), nullable=True)
     resource_id = Column(Integer, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
-    ip_address = Column(INET, nullable=True)
+    ip_address = Column(String(45), nullable=True)  # Support IPv4 and IPv6
     user_agent = Column(Text, nullable=True)
     details = Column(JSON, nullable=True)
 

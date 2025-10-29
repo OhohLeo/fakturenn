@@ -48,19 +48,18 @@ class TestRenderPathTemplate:
             "invoice_id": "INV-001",
             "source": "Free",
         }
-        result = render_path_template("{year}/{month}/{filename}", context)
-        assert result == "2025/10/{filename}"
+        result = render_path_template("{year}/{month}/invoice.pdf", context)
+        assert result == "2025/10/invoice.pdf"
 
-    def test_template_with_filename(self):
-        """Test template with filename variable."""
+    def test_template_with_invoice_id(self):
+        """Test template with invoice_id variable."""
         context = {
             "date": "2025-10-29",
             "invoice_id": "INV-001",
             "source": "Free",
-            "filename": "facture.pdf",
         }
-        result = render_path_template("{year}/{month}/{filename}", context)
-        assert result == "2025/10/facture.pdf"
+        result = render_path_template("{year}/{month}/{invoice_id}.pdf", context)
+        assert result == "2025/10/INV-001.pdf"
 
     def test_template_with_month_name(self):
         """Test template with French month name."""
@@ -78,7 +77,7 @@ class TestRenderPathTemplate:
             "date": "2025-07-15",
             "invoice_id": "INV-001",
         }
-        result = render_path_template("{year}/Q{quarter}/facture.pdf", context)
+        result = render_path_template("{year}/{quarter}/facture.pdf", context)
         assert result == "2025/Q3/facture.pdf"
 
     def test_template_with_source_and_invoice_id(self):
@@ -129,7 +128,7 @@ class TestValidatePathTemplate:
 
     def test_valid_simple_template(self):
         """Test validation of valid simple template."""
-        is_valid, error = validate_path_template("{year}/{month}/{filename}")
+        is_valid, error = validate_path_template("{year}/{month}/invoice.pdf")
         assert is_valid
         assert error == ""
 

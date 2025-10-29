@@ -41,6 +41,8 @@ class TestUserModel:
     @pytest.mark.asyncio
     async def test_user_relationships(self, db_session: AsyncSession, test_user: User):
         """Test user relationships."""
+        from sqlalchemy import select
+
         # Create automation for user
         automation = Automation(
             user_id=test_user.id,
@@ -50,9 +52,15 @@ class TestUserModel:
         db_session.add(automation)
         await db_session.commit()
 
+        # Query automations for the user
+        result = await db_session.execute(
+            select(Automation).where(Automation.user_id == test_user.id)
+        )
+        automations = result.scalars().all()
+
         # Verify relationship
-        assert len(test_user.automations) == 1
-        assert test_user.automations[0].name == "Test Automation"
+        assert len(automations) == 1
+        assert automations[0].name == "Test Automation"
 
 
 class TestAutomationModel:

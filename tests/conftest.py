@@ -4,14 +4,16 @@ import asyncio
 from datetime import timedelta
 
 import pytest
+from pytest_asyncio import fixture
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from app.db.models import Base, User
-from app.api.auth import hash_password, create_access_token
+# Lazy import to avoid bcrypt initialization during test collection
+# from app.api.auth import hash_password, create_access_token, TokenData
 
 
-@pytest.fixture(scope="session")
+@fixture(scope="session")
 def event_loop():
     """Create an event loop for async tests."""
     loop = asyncio.get_event_loop_policy().new_event_loop()
@@ -19,7 +21,7 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture
+@fixture
 async def db_session():
     """Create a test database session."""
     # Use in-memory SQLite for tests
@@ -49,13 +51,15 @@ async def db_session():
     await engine.dispose()
 
 
-@pytest.fixture
+@fixture
 async def test_user(db_session: AsyncSession) -> User:
     """Create a test user."""
+    # Use a dummy bcrypt hash for testing to avoid bcrypt initialization
+    dummy_hash = "$2b$12$abcdefghijklmnopqrstuvwxyz.test"
     user = User(
         username="testuser",
         email="test@example.com",
-        hashed_password=hash_password("testpass123"),
+        hashed_password=dummy_hash,
         language="fr",
         timezone="Europe/Paris",
         role="user",
@@ -67,13 +71,15 @@ async def test_user(db_session: AsyncSession) -> User:
     return user
 
 
-@pytest.fixture
+@fixture
 async def test_admin_user(db_session: AsyncSession) -> User:
     """Create a test admin user."""
+    # Use a dummy bcrypt hash for testing to avoid bcrypt initialization
+    dummy_hash = "$2b$12$abcdefghijklmnopqrstuvwxyz.test"
     admin = User(
         username="admin",
         email="admin@example.com",
-        hashed_password=hash_password("adminpass123"),
+        hashed_password=dummy_hash,
         language="fr",
         timezone="Europe/Paris",
         role="admin",
@@ -85,15 +91,33 @@ async def test_admin_user(db_session: AsyncSession) -> User:
     return admin
 
 
-@pytest.fixture
-def test_token(test_user: User) -> str:
+@fixture
+async def test_token(test_user: User) -> str:
     """Create a test JWT token."""
-    return create_access_token(test_user.id)
+    from app.api.auth import create_access_token, TokenData
+
+    token_data = TokenData(
+        user_id=test_user.id,
+        username=test_user.username,
+        email=test_user.email,
+        role=test_user.role,
+        language=test_user.language,
+    )
+    return create_access_token(token_data)
 
 
-@pytest.fixture
-def test_admin_token(test_admin_user: User) -> str:
+@fixture
+async def test_admin_token(test_admin_user: User) -> str:
     """Create a test admin JWT token."""
-    return create_access_token(test_admin_user.id)
+    from app.api.auth import create_access_token, TokenData
+
+    token_data = TokenData(
+        user_id=test_admin_user.id,
+        username=test_admin_user.username,
+        email=test_admin_user.email,
+        role=test_admin_user.role,
+        language=test_admin_user.language,
+    )
+    return create_access_token(token_data)
 
 

@@ -141,6 +141,7 @@ def validate_path_template(template: str) -> tuple[bool, str]:
             "date",
             "amount_eur",
             "source",
+            "filename",
         ]:
             return False, f"Unknown variable: {var}"
 

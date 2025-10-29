@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "fakturenn"
 version = "0.0.1"
@@ -28,6 +32,7 @@ dependencies = [
     "pydantic[email]>=2.10.0",
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=4.0.0",
     "hvac>=2.3.0",
     "nats-py>=2.9.0",
     "ruff>=0.12.8",
@@ -40,7 +45,11 @@ dev = [
     "pytest-cov>=5.0.0",
     "httpx>=0.28.0",
     "testcontainers[postgresql]>=4.9.0",
+    "aiosqlite>=0.19.0",
 ]
 
 [project.scripts]
 fakturenn = "scripts.run_fakturenn:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "scripts"]

@@ -133,7 +133,9 @@ class PahekoExportHandler(ExportHandler):
                 return None
 
             # Retrieve Paheko credentials from Vault
-            paheko_secret = self.vault_client.get_secret("secret/data/fakturenn/paheko/credentials")
+            paheko_secret = self.vault_client.get_secret(
+                "secret/data/fakturenn/paheko/credentials"
+            )
             if not paheko_secret:
                 logger.error("Paheko credentials not found in Vault")
                 return None
@@ -175,7 +177,9 @@ class PahekoExportHandler(ExportHandler):
             # Find matching year
             for year in years:
                 try:
-                    start = datetime.strptime(year.get("start_date", ""), "%Y-%m-%d").date()
+                    start = datetime.strptime(
+                        year.get("start_date", ""), "%Y-%m-%d"
+                    ).date()
                     end = datetime.strptime(year.get("end_date", ""), "%Y-%m-%d").date()
                     if start <= date_obj <= end:
                         return year.get("id")
@@ -189,9 +193,7 @@ class PahekoExportHandler(ExportHandler):
             logger.error(f"Failed to get accounting year: {e}")
             return None
 
-    async def _check_duplicate(
-        self, id_year: int, label: str, date_str: str
-    ) -> bool:
+    async def _check_duplicate(self, id_year: int, label: str, date_str: str) -> bool:
         """Check for duplicate transactions.
 
         Args:

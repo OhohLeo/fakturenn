@@ -10,7 +10,7 @@ import time
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Any
 from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.common.by import By

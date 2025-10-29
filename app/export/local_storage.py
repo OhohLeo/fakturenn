@@ -42,7 +42,9 @@ class LocalStorageExportHandler(ExportHandler):
                 )
 
             # Validate template
-            path_template = self.config.get("path_template", "{year}/{month}/{source}_{invoice_id}.pdf")
+            path_template = self.config.get(
+                "path_template", "{year}/{month}/{source}_{invoice_id}.pdf"
+            )
             is_valid, error = validate_path_template(path_template)
             if not is_valid:
                 return ExportResult(status="failed", error_message=error)

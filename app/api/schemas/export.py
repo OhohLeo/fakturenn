@@ -10,11 +10,10 @@ from pydantic import BaseModel, Field
 class PahekoExportConfig(BaseModel):
     """Paheko export configuration."""
 
-    paheko_type: str = Field(
-        ..., description="EXPENSE, REVENUE, TRANSFER, ADVANCED"
-    )
+    paheko_type: str = Field(..., description="EXPENSE, REVENUE, TRANSFER, ADVANCED")
     label_template: str = Field(
-        ..., description="Template with {invoice_id}, {month}, {date}, {year}, {quarter}"
+        ...,
+        description="Template with {invoice_id}, {month}, {date}, {year}, {quarter}",
     )
     debit: str = Field(..., description="Debit account code(s)")
     credit: str = Field(..., description="Credit account code(s)")
@@ -48,23 +47,25 @@ class ExportBase(BaseModel):
     """Base export schema."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    type: str = Field(
-        ..., description="Paheko, LocalStorage, or GoogleDrive"
-    )
+    type: str = Field(..., description="Paheko, LocalStorage, or GoogleDrive")
     active: bool = True
 
 
 class ExportCreate(ExportBase):
     """Export creation schema."""
 
-    configuration: Union[PahekoExportConfig, LocalStorageExportConfig, GoogleDriveExportConfig]
+    configuration: Union[
+        PahekoExportConfig, LocalStorageExportConfig, GoogleDriveExportConfig
+    ]
 
 
 class ExportUpdate(BaseModel):
     """Export update schema."""
 
     name: Optional[str] = None
-    configuration: Optional[Union[PahekoExportConfig, LocalStorageExportConfig, GoogleDriveExportConfig]] = None
+    configuration: Optional[
+        Union[PahekoExportConfig, LocalStorageExportConfig, GoogleDriveExportConfig]
+    ] = None
     active: Optional[bool] = None
 
 

@@ -11,6 +11,7 @@ from app.db.models import ExportHistory, User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 @router.get("")
 async def list_export_history(
     job_id: int = None,
@@ -42,8 +43,13 @@ async def list_export_history(
         for h in result.scalars().all()
     ]
 
+
 @router.get("/{history_id}")
-async def get_export_history(history_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_export_history(
+    history_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get export history details."""
     stmt = select(ExportHistory).where(ExportHistory.id == history_id)
     result = await db.execute(stmt)

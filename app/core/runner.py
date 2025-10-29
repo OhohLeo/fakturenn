@@ -21,7 +21,9 @@ from app.core.paheko_helpers import (
 )
 
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -52,15 +54,23 @@ class FakturennRunner:
             credentials_path=sheets_credentials_path,
             token_path=sheets_token_path,
         )
-        self.gmail = GmailManager(credentials_path=gmail_credentials_path, token_path=gmail_token_path)
+        self.gmail = GmailManager(
+            credentials_path=gmail_credentials_path, token_path=gmail_token_path
+        )
         self.output_dir = output_dir
-        self.source_runner = SourceRunner(output_dir=self.output_dir, gmail_manager=self.gmail)
+        self.source_runner = SourceRunner(
+            output_dir=self.output_dir, gmail_manager=self.gmail
+        )
 
         # Paheko client optional
         self.paheko: Optional[PahekoClient] = None
         if paheko_base_url and paheko_username and paheko_password:
-            logger.info(f"Initialisation de Paheko avec: {paheko_base_url}, {paheko_username}, {paheko_password}")
-            self.paheko = PahekoClient(paheko_base_url, paheko_username, paheko_password)
+            logger.info(
+                f"Initialisation de Paheko avec: {paheko_base_url}, {paheko_username}, {paheko_password}"
+            )
+            self.paheko = PahekoClient(
+                paheko_base_url, paheko_username, paheko_password
+            )
 
     def load_config(self) -> List[FakturennConfigRow]:
         return self.sheets_loader.fetch_rows()
@@ -77,11 +87,15 @@ class FakturennRunner:
             return None
 
         if not id_year or id_year <= 0:
-            logger.warning("Aucun exercice Paheko sélectionné (id_year manquant), export ignoré")
+            logger.warning(
+                "Aucun exercice Paheko sélectionné (id_year manquant), export ignoré"
+            )
             return None
 
         label = mapping.label_template.format(**{k: str(v) for k, v in context.items()})
-        debit_list, credit_list = parse_transaction_fields(mapping.debit, mapping.credit)
+        debit_list, credit_list = parse_transaction_fields(
+            mapping.debit, mapping.credit
+        )
         first_debit = debit_list[0] if debit_list else None
         first_credit = credit_list[0] if credit_list else None
         try:
@@ -101,7 +115,9 @@ class FakturennRunner:
             account_code_to_check = first_debit or first_credit
             if account_code_to_check:
                 try:
-                    journal = self.paheko.get_account_journal(id_year=id_year, code=account_code_to_check)
+                    journal = self.paheko.get_account_journal(
+                        id_year=id_year, code=account_code_to_check
+                    )
 
                     def normalize_date(value: object) -> Optional[str]:
                         if isinstance(value, str):
@@ -115,7 +131,9 @@ class FakturennRunner:
                     target_date = payload["date"]
                     for entry in journal or []:
                         entry_date = normalize_date(entry.get("date"))  # type: ignore[arg-type]
-                        entry_label = entry.get("label") if isinstance(entry, dict) else None  # type: ignore[arg-type]
+                        entry_label = (
+                            entry.get("label") if isinstance(entry, dict) else None
+                        )  # type: ignore[arg-type]
                         if entry_date == target_date and entry_label == label:
                             logger.info(
                                 f"Écriture déjà présente pour le compte {account_code_to_check} à la date {target_date} avec le libellé '{label}'. Export ignoré."
@@ -134,7 +152,9 @@ class FakturennRunner:
             logger.error(f"Erreur export Paheko: {e}")
             return None
 
-    def run(self, from_date: str, max_results: int = 30, origins: Optional[List[str]] = None) -> None:
+    def run(
+        self, from_date: str, max_results: int = 30, origins: Optional[List[str]] = None
+    ) -> None:
         configs = self.load_config()
         if not configs:
             logger.warning("Aucune configuration à traiter")
@@ -143,7 +163,11 @@ class FakturennRunner:
         # Filter configs by origins if provided
         if origins:
             normalized_origins = {o.strip().lower() for o in origins if o.strip()}
-            configs = [c for c in configs if (c.origin or "").strip().lower() in normalized_origins]
+            configs = [
+                c
+                for c in configs
+                if (c.origin or "").strip().lower() in normalized_origins
+            ]
             if not configs:
                 logger.info("Aucune configuration ne correspond aux origines fournies")
                 return
@@ -189,8 +213,12 @@ class FakturennRunner:
 
             for invoice in downloaded_invoices:
                 invoice_date = parse_date_label_to_date(invoice.date or "")
-                invoice_date_str = invoice_date.strftime("%Y-%m-%d") if invoice_date else ""
-                inv_month_label, inv_year, inv_quarter = extract_month_and_year_from_invoice_date(invoice.date or "")
+                invoice_date_str = (
+                    invoice_date.strftime("%Y-%m-%d") if invoice_date else ""
+                )
+                inv_month_label, inv_year, inv_quarter = (
+                    extract_month_and_year_from_invoice_date(invoice.date or "")
+                )
                 inv_year_str = str(inv_year) if inv_year is not None else ""
                 invoice_id_for_context = invoice.invoice_id or ""
                 context = {
@@ -203,14 +231,20 @@ class FakturennRunner:
 
                 inv_dt = parse_date_label_to_date(invoice.date or "")
                 if not inv_dt:
-                    logger.warning(f"Date de facture invalide ou introuvable ('{invoice.date}'), export ignoré")
+                    logger.warning(
+                        f"Date de facture invalide ou introuvable ('{invoice.date}'), export ignoré"
+                    )
                     continue
 
                 matching_year: Optional[Dict] = None
                 for y in paheko_years:
                     try:
-                        y_start = datetime.strptime(y.get("start_date", ""), "%Y-%m-%d").date()
-                        y_end = datetime.strptime(y.get("end_date", ""), "%Y-%m-%d").date()
+                        y_start = datetime.strptime(
+                            y.get("start_date", ""), "%Y-%m-%d"
+                        ).date()
+                        y_end = datetime.strptime(
+                            y.get("end_date", ""), "%Y-%m-%d"
+                        ).date()
                     except Exception:
                         continue
                     if y_start <= inv_dt <= y_end:
@@ -218,14 +252,20 @@ class FakturennRunner:
                         break
 
                 if not matching_year:
-                    logger.warning(f"Aucun exercice Paheko ne couvre la date {invoice.date} ({inv_dt}), export ignoré")
+                    logger.warning(
+                        f"Aucun exercice Paheko ne couvre la date {invoice.date} ({inv_dt}), export ignoré"
+                    )
                     continue
 
                 if invoice.amount_eur is None or invoice.amount_eur <= 0:
-                    logger.warning(f"Montant de facture invalide ou nul ('{invoice.amount_eur}'), export ignoré")
+                    logger.warning(
+                        f"Montant de facture invalide ou nul ('{invoice.amount_eur}'), export ignoré"
+                    )
                     continue
 
-                id_year = matching_year.get("id") if isinstance(matching_year, dict) else None
+                id_year = (
+                    matching_year.get("id") if isinstance(matching_year, dict) else None
+                )
                 self.export_to_paheko(
                     mapping=mapping,
                     context=context,

@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 class GoogleDriveExportHandler(ExportHandler):
     """Handler for exporting invoices to Google Drive."""
 
-    def __init__(self, config: Dict[str, Any], vault_client: Any = None, user_id: int = None):
+    def __init__(
+        self, config: Dict[str, Any], vault_client: Any = None, user_id: int = None
+    ):
         """Initialize Google Drive handler.
 
         Args:
@@ -148,7 +150,9 @@ class GoogleDriveExportHandler(ExportHandler):
         logger.warning("Google Drive folder creation not yet implemented")
         return None
 
-    async def _upload_file(self, local_path: str, filename: str, folder_id: str) -> Optional[str]:
+    async def _upload_file(
+        self, local_path: str, filename: str, folder_id: str
+    ) -> Optional[str]:
         """Upload file to Drive.
 
         Args:

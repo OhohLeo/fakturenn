@@ -1,7 +1,6 @@
 """Authentication endpoints."""
 
 import logging
-from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -10,12 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import (
     create_access_token,
     create_refresh_token,
-    hash_password,
     verify_password,
     TokenData,
 )
 from app.api.dependencies import get_db, get_current_user
-from app.api.schemas.user import UserLogin, TokenResponse, UserResponse, UserCreate, UserProfile
+from app.api.schemas.user import UserLogin, TokenResponse, UserCreate, UserProfile
 from app.db.models import User
 
 logger = logging.getLogger(__name__)

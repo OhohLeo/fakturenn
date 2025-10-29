@@ -3,16 +3,14 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import get_db, get_current_user
 from app.api.schemas.automation import (
     AutomationCreate,
     AutomationResponse,
     AutomationUpdate,
-    AutomationWithRelations,
 )
 from app.db.models import Automation, User, Job
 
@@ -71,7 +69,8 @@ async def create_automation(
     """
     # Check if automation with same name exists
     stmt = select(Automation).where(
-        (Automation.user_id == current_user.id) & (Automation.name == automation_data.name)
+        (Automation.user_id == current_user.id)
+        & (Automation.name == automation_data.name)
     )
     result = await db.execute(stmt)
     if result.scalar_one_or_none():
@@ -258,7 +257,7 @@ async def trigger_automation(
 
     # Create job (will be picked up by workers via NATS)
     from app.db.models import Job
-    from datetime import datetime, date
+    from datetime import datetime
 
     job = Job(
         automation_id=automation_id,
@@ -271,7 +270,9 @@ async def trigger_automation(
     await db.commit()
     await db.refresh(job)
 
-    logger.info(f"Job {job.id} triggered for automation '{automation.name}' by {current_user.username}")
+    logger.info(
+        f"Job {job.id} triggered for automation '{automation.name}' by {current_user.username}"
+    )
 
     # TODO: Publish job trigger event to NATS
     # nats_client.publish("fakturenn.jobs.trigger", job_data)

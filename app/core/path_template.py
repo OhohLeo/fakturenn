@@ -137,7 +137,11 @@ def validate_path_template(template: str) -> tuple[bool, str]:
     variables = re.findall(r"\{(\w+)\}", template)
 
     for var in variables:
-        if var not in TEMPLATE_VARIABLES and var not in ["date", "amount_eur", "source"]:
+        if var not in TEMPLATE_VARIABLES and var not in [
+            "date",
+            "amount_eur",
+            "source",
+        ]:
             return False, f"Unknown variable: {var}"
 
     # Check for required variables

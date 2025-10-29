@@ -5,6 +5,7 @@ Revises:
 Create Date: 2025-10-29 18:00:00.000000
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -25,11 +26,26 @@ def upgrade() -> None:
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("hashed_password", sa.String(length=255), nullable=False),
         sa.Column("language", sa.String(length=10), nullable=True, server_default="fr"),
-        sa.Column("timezone", sa.String(length=50), nullable=True, server_default="Europe/Paris"),
+        sa.Column(
+            "timezone",
+            sa.String(length=50),
+            nullable=True,
+            server_default="Europe/Paris",
+        ),
         sa.Column("role", sa.String(length=20), nullable=True, server_default="user"),
         sa.Column("active", sa.Boolean(), nullable=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
-        sa.Column("updated_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
         sa.CheckConstraint("role IN ('admin', 'user')"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("username"),
@@ -49,8 +65,18 @@ def upgrade() -> None:
         sa.Column("schedule", sa.String(length=100), nullable=True),
         sa.Column("from_date_rule", sa.String(length=50), nullable=True),
         sa.Column("active", sa.Boolean(), nullable=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
-        sa.Column("updated_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id", "name", name="uq_automation_user_name"),
@@ -67,13 +93,27 @@ def upgrade() -> None:
         sa.Column("type", sa.String(length=50), nullable=False),
         sa.Column("email_sender_from", sa.String(length=255), nullable=True),
         sa.Column("email_subject_contains", sa.String(length=255), nullable=True),
-        sa.Column("extraction_params", postgresql.JSON(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "extraction_params", postgresql.JSON(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("max_results", sa.Integer(), nullable=True, server_default="30"),
         sa.Column("active", sa.Boolean(), nullable=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
-        sa.Column("updated_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
         sa.CheckConstraint("type IN ('FreeInvoice', 'FreeMobileInvoice', 'Gmail')"),
-        sa.ForeignKeyConstraint(["automation_id"], ["automations.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["automation_id"], ["automations.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("idx_sources_automation", "sources", ["automation_id"])
@@ -86,12 +126,26 @@ def upgrade() -> None:
         sa.Column("automation_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("type", sa.String(length=50), nullable=False),
-        sa.Column("configuration", postgresql.JSON(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "configuration", postgresql.JSON(astext_type=sa.Text()), nullable=False
+        ),
         sa.Column("active", sa.Boolean(), nullable=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
-        sa.Column("updated_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
         sa.CheckConstraint("type IN ('Paheko', 'LocalStorage', 'GoogleDrive')"),
-        sa.ForeignKeyConstraint(["automation_id"], ["automations.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["automation_id"], ["automations.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("idx_exports_automation", "exports", ["automation_id"])
@@ -105,7 +159,12 @@ def upgrade() -> None:
         sa.Column("export_id", sa.Integer(), nullable=False),
         sa.Column("priority", sa.Integer(), nullable=True, server_default="1"),
         sa.Column("conditions", postgresql.JSON(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
         sa.ForeignKeyConstraint(["export_id"], ["exports.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["source_id"], ["sources.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -120,16 +179,25 @@ def upgrade() -> None:
         "jobs",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("automation_id", sa.Integer(), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="pending"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="pending"
+        ),
         sa.Column("from_date", sa.Date(), nullable=True),
         sa.Column("max_results", sa.Integer(), nullable=True),
         sa.Column("started_at", sa.DateTime(), nullable=True),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("stats", postgresql.JSON(astext_type=sa.Text()), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
         sa.CheckConstraint("status IN ('pending', 'running', 'completed', 'failed')"),
-        sa.ForeignKeyConstraint(["automation_id"], ["automations.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["automation_id"], ["automations.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("idx_jobs_automation", "jobs", ["automation_id"])
@@ -144,7 +212,12 @@ def upgrade() -> None:
         sa.Column("export_id", sa.Integer(), nullable=True),
         sa.Column("export_type", sa.String(length=50), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
-        sa.Column("exported_at", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
+        sa.Column(
+            "exported_at",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("context", postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column("external_reference", sa.String(length=255), nullable=True),
@@ -166,15 +239,24 @@ def upgrade() -> None:
         sa.Column("action", sa.String(length=100), nullable=False),
         sa.Column("resource_type", sa.String(length=50), nullable=True),
         sa.Column("resource_id", sa.Integer(), nullable=True),
-        sa.Column("timestamp", sa.DateTime(), nullable=True, server_default=sa.func.current_timestamp()),
+        sa.Column(
+            "timestamp",
+            sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.current_timestamp(),
+        ),
         sa.Column("ip_address", postgresql.INET(), nullable=True),
         sa.Column("user_agent", sa.Text(), nullable=True),
         sa.Column("details", postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("idx_audit_log_resource", "audit_log", ["resource_type", "resource_id"])
-    op.create_index("idx_audit_log_timestamp", "audit_log", ["timestamp"], reverse_order=False)
+    op.create_index(
+        "idx_audit_log_resource", "audit_log", ["resource_type", "resource_id"]
+    )
+    op.create_index(
+        "idx_audit_log_timestamp", "audit_log", ["timestamp"], reverse_order=False
+    )
     op.create_index("idx_audit_log_user", "audit_log", ["user_id"])
     op.create_index("ix_audit_log_id", "audit_log", ["id"])
 

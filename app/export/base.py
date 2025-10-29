@@ -13,7 +13,9 @@ class ExportResult:
     """Result of an export operation."""
 
     status: str  # "success", "failed", "duplicate_skipped"
-    external_reference: Optional[str] = None  # Paheko transaction ID, file path, Drive file ID
+    external_reference: Optional[str] = (
+        None  # Paheko transaction ID, file path, Drive file ID
+    )
     error_message: Optional[str] = None
 
 

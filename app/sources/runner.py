@@ -29,7 +29,9 @@ class SourceRunner:
         self._marker_converter = None
         self._marker_models = None
 
-    def _filter_invoices_from_date(self, invoices: List[Invoice], from_date: date) -> List[Invoice]:
+    def _filter_invoices_from_date(
+        self, invoices: List[Invoice], from_date: date
+    ) -> List[Invoice]:
         filtered: List[Invoice] = []
         for inv in invoices:
             inv_dt = parse_date_label_to_date(inv.date or "")
@@ -118,7 +120,9 @@ class SourceRunner:
             try:
                 _, _ = downloader.download_invoices_from(from_date_str)
             except Exception as e:
-                logger.warning(f"Téléchargement via 'download_invoices_from' a échoué: {e}")
+                logger.warning(
+                    f"Téléchargement via 'download_invoices_from' a échoué: {e}"
+                )
 
             invoices: List[Invoice] = []
             current_year = datetime.now().year
@@ -172,7 +176,9 @@ class SourceRunner:
             patterns = []
             for p in pattern_value:
                 if isinstance(p, str):
-                    patterns.append(re.compile(self._convert_named_groups(p), re.DOTALL))
+                    patterns.append(
+                        re.compile(self._convert_named_groups(p), re.DOTALL)
+                    )
             return patterns
         return []
 
@@ -227,8 +233,12 @@ class SourceRunner:
             }.items():
                 if extraction_params.get(source_expected):
                     source = source_actual
-                    patterns = self._normalize_patterns(extraction_params.get(source_expected))
-                    logger.info(f"Regex '{source_expected}' valide: {len(patterns)} pattern(s)")
+                    patterns = self._normalize_patterns(
+                        extraction_params.get(source_expected)
+                    )
+                    logger.info(
+                        f"Regex '{source_expected}' valide: {len(patterns)} pattern(s)"
+                    )
                     break
 
         if not patterns:
@@ -236,25 +246,35 @@ class SourceRunner:
             return []
 
         # Download attachments first
-        saved_attachment_paths = self.gmail.download_attachments_from_emails(emails, self.output_dir)
-        logger.info(f"Nombre de pièces jointes téléchargées: {len(saved_attachment_paths)}")
+        saved_attachment_paths = self.gmail.download_attachments_from_emails(
+            emails, self.output_dir
+        )
+        logger.info(
+            f"Nombre de pièces jointes téléchargées: {len(saved_attachment_paths)}"
+        )
 
         # Extract invoice data
         extracted_invoices: List[Invoice] = []
 
         if use_attachment_markdown:
             # Extract from PDF attachments converted to markdown
-            extracted_invoices = self._extract_from_attachment_markdown(emails, saved_attachment_paths, patterns)
+            extracted_invoices = self._extract_from_attachment_markdown(
+                emails, saved_attachment_paths, patterns
+            )
         else:
             # Extract from email body
             extracted_invoices = self._extract_from_email_body(emails, source, patterns)
 
         # Filter by date
-        filtered_invoices = self._filter_invoices_from_date(extracted_invoices, from_date)
+        filtered_invoices = self._filter_invoices_from_date(
+            extracted_invoices, from_date
+        )
 
         return filtered_invoices
 
-    def _extract_from_email_body(self, emails: List[Dict], source: str, patterns: List[re.Pattern]) -> List[Invoice]:
+    def _extract_from_email_body(
+        self, emails: List[Dict], source: str, patterns: List[re.Pattern]
+    ) -> List[Invoice]:
         """Extract invoice data from email body (HTML or text) using multiple patterns."""
         extracted_invoices: List[Invoice] = []
 
@@ -271,7 +291,9 @@ class SourceRunner:
                 # Apply each pattern and merge results
                 for pattern_idx, pattern in enumerate(patterns):
                     for m in pattern.finditer(body):
-                        logger.info(f"Match from pattern {pattern_idx + 1} '{str(pattern)}': {m.groupdict()}")
+                        logger.info(
+                            f"Match from pattern {pattern_idx + 1} '{str(pattern)}': {m.groupdict()}"
+                        )
                         # Merge captured groups, later patterns can override earlier ones
                         for key, value in m.groupdict().items():
                             if value is not None:
@@ -297,18 +319,25 @@ class SourceRunner:
                         )
                     )
             except Exception as e:
-                logger.warning(f"Erreur lors de l'extraction sur l'email {email.get('id')}: {e}")
+                logger.warning(
+                    f"Erreur lors de l'extraction sur l'email {email.get('id')}: {e}"
+                )
 
         return extracted_invoices
 
     def _extract_from_attachment_markdown(
-        self, emails: List[Dict], saved_attachment_paths: List[str], patterns: List[re.Pattern]
+        self,
+        emails: List[Dict],
+        saved_attachment_paths: List[str],
+        patterns: List[re.Pattern],
     ) -> List[Invoice]:
         """Extract invoice data from PDF attachments converted to markdown using multiple patterns."""
         extracted_invoices: List[Invoice] = []
 
         # Filter to only process PDF attachments
-        pdf_paths = [path for path in saved_attachment_paths if path.lower().endswith(".pdf")]
+        pdf_paths = [
+            path for path in saved_attachment_paths if path.lower().endswith(".pdf")
+        ]
         logger.info(f"Found {len(pdf_paths)} PDF attachments to process")
 
         for email in emails:
@@ -320,7 +349,9 @@ class SourceRunner:
                 # Convert PDF to markdown
                 markdown_text = self._convert_pdf_to_markdown(attachment_path)
                 if not markdown_text:
-                    logger.warning(f"Could not convert PDF to markdown: {attachment_path}")
+                    logger.warning(
+                        f"Could not convert PDF to markdown: {attachment_path}"
+                    )
                     continue
 
                 logger.info(f"Markdown text: {markdown_text}")
@@ -333,7 +364,9 @@ class SourceRunner:
                     # Apply each pattern and merge results
                     for pattern_idx, pattern in enumerate(patterns):
                         for m in pattern.finditer(markdown_text):
-                            logger.info(f"Match from pattern {pattern_idx + 1} {str(pattern)}: {m.groupdict()}")
+                            logger.info(
+                                f"Match from pattern {pattern_idx + 1} {str(pattern)}: {m.groupdict()}"
+                            )
                             # Merge captured groups, later patterns can override earlier ones
                             for key, value in m.groupdict().items():
                                 if value is not None:
@@ -359,7 +392,9 @@ class SourceRunner:
                             )
                         )
                 except Exception as e:
-                    logger.warning(f"Erreur lors de l'extraction du PDF {attachment_path}: {e}")
+                    logger.warning(
+                        f"Erreur lors de l'extraction du PDF {attachment_path}: {e}"
+                    )
 
         return extracted_invoices
 

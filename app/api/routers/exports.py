@@ -12,6 +12,7 @@ from app.db.models import Export, Automation, User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 @router.get("", response_model=list[ExportResponse])
 async def list_exports(
     automation_id: int = None,
@@ -34,6 +35,7 @@ async def list_exports(
     result = await db.execute(query)
     return [ExportResponse.from_orm(e) for e in result.scalars().all()]
 
+
 @router.post("", response_model=ExportResponse, status_code=status.HTTP_201_CREATED)
 async def create_export(
     export_data: ExportCreate,
@@ -48,7 +50,7 @@ async def create_export(
     result = await db.execute(stmt)
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    
+
     db_export = Export(
         automation_id=automation_id,
         name=export_data.name,
@@ -61,8 +63,13 @@ async def create_export(
     await db.refresh(db_export)
     return ExportResponse.from_orm(db_export)
 
+
 @router.get("/{export_id}", response_model=ExportResponse)
-async def get_export(export_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def get_export(
+    export_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get export."""
     stmt = select(Export).where(Export.id == export_id)
     result = await db.execute(stmt)
@@ -71,28 +78,39 @@ async def get_export(export_id: int, current_user: User = Depends(get_current_us
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return ExportResponse.from_orm(export)
 
+
 @router.put("/{export_id}", response_model=ExportResponse)
-async def update_export(export_id: int, export_update: ExportUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def update_export(
+    export_id: int,
+    export_update: ExportUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Update export."""
     stmt = select(Export).where(Export.id == export_id)
     result = await db.execute(stmt)
     export = result.scalar_one_or_none()
     if not export:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    
+
     if export_update.name:
         export.name = export_update.name
     if export_update.configuration:
         export.configuration = export_update.configuration.dict()
     if export_update.active is not None:
         export.active = export_update.active
-    
+
     await db.commit()
     await db.refresh(export)
     return ExportResponse.from_orm(export)
 
+
 @router.delete("/{export_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_export(export_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def delete_export(
+    export_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Delete export."""
     stmt = select(Export).where(Export.id == export_id)
     result = await db.execute(stmt)

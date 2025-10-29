@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, get_current_user
 from app.api.schemas.export import SourceExportMappingResponse, SourceExportMappingBase
-from app.db.models import SourceExportMapping, Source, Export, Automation, User
+from app.db.models import SourceExportMapping, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
 
 @router.get("", response_model=list[SourceExportMappingResponse])
 async def list_mappings(
@@ -28,7 +29,10 @@ async def list_mappings(
     result = await db.execute(query)
     return [SourceExportMappingResponse.from_orm(m) for m in result.scalars().all()]
 
-@router.post("", response_model=SourceExportMappingResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "", response_model=SourceExportMappingResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_mapping(
     mapping_data: SourceExportMappingBase,
     current_user: User = Depends(get_current_user),
@@ -41,8 +45,13 @@ async def create_mapping(
     await db.refresh(db_mapping)
     return SourceExportMappingResponse.from_orm(db_mapping)
 
+
 @router.delete("/{mapping_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_mapping(mapping_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def delete_mapping(
+    mapping_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Delete mapping."""
     stmt = select(SourceExportMapping).where(SourceExportMapping.id == mapping_id)
     result = await db.execute(stmt)

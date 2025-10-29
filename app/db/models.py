@@ -1,7 +1,6 @@
 """SQLAlchemy ORM models for Fakturenn."""
 
 from datetime import datetime
-from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
     Column,
@@ -15,7 +14,6 @@ from sqlalchemy import (
     UniqueConstraint,
     Index,
     JSON,
-    Enum,
     Date,
     INET,
 )
@@ -42,12 +40,12 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    automations = relationship("Automation", back_populates="user", cascade="all, delete-orphan")
+    automations = relationship(
+        "Automation", back_populates="user", cascade="all, delete-orphan"
+    )
     audit_logs = relationship("AuditLog", back_populates="user")
 
-    __table_args__ = (
-        CheckConstraint("role IN ('admin', 'user')"),
-    )
+    __table_args__ = (CheckConstraint("role IN ('admin', 'user')"),)
 
 
 class Automation(Base):
@@ -56,7 +54,9 @@ class Automation(Base):
     __tablename__ = "automations"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     schedule = Column(String(100), nullable=True)  # Cron expression
@@ -67,9 +67,15 @@ class Automation(Base):
 
     # Relationships
     user = relationship("User", back_populates="automations")
-    sources = relationship("Source", back_populates="automation", cascade="all, delete-orphan")
-    exports = relationship("Export", back_populates="automation", cascade="all, delete-orphan")
-    jobs = relationship("Job", back_populates="automation", cascade="all, delete-orphan")
+    sources = relationship(
+        "Source", back_populates="automation", cascade="all, delete-orphan"
+    )
+    exports = relationship(
+        "Export", back_populates="automation", cascade="all, delete-orphan"
+    )
+    jobs = relationship(
+        "Job", back_populates="automation", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uq_automation_user_name"),
@@ -83,7 +89,9 @@ class Source(Base):
     __tablename__ = "sources"
 
     id = Column(Integer, primary_key=True, index=True)
-    automation_id = Column(Integer, ForeignKey("automations.id", ondelete="CASCADE"), nullable=False)
+    automation_id = Column(
+        Integer, ForeignKey("automations.id", ondelete="CASCADE"), nullable=False
+    )
     name = Column(String(255), nullable=False)
     type = Column(String(50), nullable=False)
     email_sender_from = Column(String(255), nullable=True)
@@ -96,7 +104,9 @@ class Source(Base):
 
     # Relationships
     automation = relationship("Automation", back_populates="sources")
-    export_mappings = relationship("SourceExportMapping", back_populates="source", cascade="all, delete-orphan")
+    export_mappings = relationship(
+        "SourceExportMapping", back_populates="source", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("type IN ('FreeInvoice', 'FreeMobileInvoice', 'Gmail')"),
@@ -110,7 +120,9 @@ class Export(Base):
     __tablename__ = "exports"
 
     id = Column(Integer, primary_key=True, index=True)
-    automation_id = Column(Integer, ForeignKey("automations.id", ondelete="CASCADE"), nullable=False)
+    automation_id = Column(
+        Integer, ForeignKey("automations.id", ondelete="CASCADE"), nullable=False
+    )
     name = Column(String(255), nullable=False)
     type = Column(String(50), nullable=False)  # Paheko, LocalStorage, GoogleDrive
     configuration = Column(JSON, nullable=False)
@@ -120,7 +132,9 @@ class Export(Base):
 
     # Relationships
     automation = relationship("Automation", back_populates="exports")
-    export_mappings = relationship("SourceExportMapping", back_populates="export", cascade="all, delete-orphan")
+    export_mappings = relationship(
+        "SourceExportMapping", back_populates="export", cascade="all, delete-orphan"
+    )
     export_histories = relationship("ExportHistory", back_populates="export")
 
     __table_args__ = (
@@ -135,8 +149,12 @@ class SourceExportMapping(Base):
     __tablename__ = "source_export_mappings"
 
     id = Column(Integer, primary_key=True, index=True)
-    source_id = Column(Integer, ForeignKey("sources.id", ondelete="CASCADE"), nullable=False)
-    export_id = Column(Integer, ForeignKey("exports.id", ondelete="CASCADE"), nullable=False)
+    source_id = Column(
+        Integer, ForeignKey("sources.id", ondelete="CASCADE"), nullable=False
+    )
+    export_id = Column(
+        Integer, ForeignKey("exports.id", ondelete="CASCADE"), nullable=False
+    )
     priority = Column(Integer, default=1)
     conditions = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -158,7 +176,9 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    automation_id = Column(Integer, ForeignKey("automations.id", ondelete="CASCADE"), nullable=False)
+    automation_id = Column(
+        Integer, ForeignKey("automations.id", ondelete="CASCADE"), nullable=False
+    )
     status = Column(String(20), nullable=False, default="pending")
     from_date = Column(Date, nullable=True)
     max_results = Column(Integer, nullable=True)
@@ -170,7 +190,9 @@ class Job(Base):
 
     # Relationships
     automation = relationship("Automation", back_populates="jobs")
-    export_histories = relationship("ExportHistory", back_populates="job", cascade="all, delete-orphan")
+    export_histories = relationship(
+        "ExportHistory", back_populates="job", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("status IN ('pending', 'running', 'completed', 'failed')"),
@@ -186,13 +208,19 @@ class ExportHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
-    export_id = Column(Integer, ForeignKey("exports.id", ondelete="SET NULL"), nullable=True)
+    export_id = Column(
+        Integer, ForeignKey("exports.id", ondelete="SET NULL"), nullable=True
+    )
     export_type = Column(String(50), nullable=False)
     status = Column(String(20), nullable=False)
     exported_at = Column(DateTime, default=datetime.utcnow)
     error_message = Column(Text, nullable=True)
-    context = Column(JSON, nullable=True)  # {invoice_id, date, amount_eur, month, year, file_path}
-    external_reference = Column(String(255), nullable=True)  # Paheko transaction ID, Google Drive file ID, etc.
+    context = Column(
+        JSON, nullable=True
+    )  # {invoice_id, date, amount_eur, month, year, file_path}
+    external_reference = Column(
+        String(255), nullable=True
+    )  # Paheko transaction ID, Google Drive file ID, etc.
 
     # Relationships
     job = relationship("Job", back_populates="export_histories")
@@ -212,7 +240,9 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     action = Column(String(100), nullable=False)
     resource_type = Column(String(50), nullable=True)
     resource_id = Column(Integer, nullable=True)

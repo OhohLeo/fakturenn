@@ -36,7 +36,9 @@ def create_app(
     configure_logging()
 
     # Initialize database
-    init_db(database_url or "postgresql+asyncpg://fakturenn:fakturenn@localhost/fakturenn")
+    init_db(
+        database_url or "postgresql+asyncpg://fakturenn:fakturenn@localhost/fakturenn"
+    )
 
     # Initialize Vault
     init_vault(vault_addr, vault_role_id, vault_secret_id, vault_dev_mode)
@@ -73,16 +75,30 @@ def create_app(
         return {"status": "ok", "service": "fakturenn-api"}
 
     # Include routers
-    from app.api.routers import auth, users, automations, sources, exports, mappings, jobs, export_history, health
+    from app.api.routers import (
+        auth,
+        users,
+        automations,
+        sources,
+        exports,
+        mappings,
+        jobs,
+        export_history,
+        health,
+    )
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
-    app.include_router(automations.router, prefix="/api/v1/automations", tags=["automations"])
+    app.include_router(
+        automations.router, prefix="/api/v1/automations", tags=["automations"]
+    )
     app.include_router(sources.router, prefix="/api/v1/sources", tags=["sources"])
     app.include_router(exports.router, prefix="/api/v1/exports", tags=["exports"])
     app.include_router(mappings.router, prefix="/api/v1/mappings", tags=["mappings"])
     app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
-    app.include_router(export_history.router, prefix="/api/v1/export-history", tags=["export-history"])
+    app.include_router(
+        export_history.router, prefix="/api/v1/export-history", tags=["export-history"]
+    )
     app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
     return app

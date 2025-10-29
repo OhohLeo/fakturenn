@@ -60,7 +60,9 @@ class GoogleSheetsConfigLoader:
 
         if os.path.exists(self.token_path):
             try:
-                creds = Credentials.from_authorized_user_file(self.token_path, SHEETS_SCOPES)
+                creds = Credentials.from_authorized_user_file(
+                    self.token_path, SHEETS_SCOPES
+                )
                 logger.info("Token Google Sheets chargé depuis le fichier")
             except Exception as e:
                 logger.warning(f"Erreur lors du chargement du token Sheets: {e}")
@@ -72,7 +74,9 @@ class GoogleSheetsConfigLoader:
                     creds.refresh(Request())
                     logger.info("Token Sheets rafraîchi avec succès")
                 except Exception as e:
-                    logger.error(f"Erreur lors du rafraîchissement du token Sheets: {e}")
+                    logger.error(
+                        f"Erreur lors du rafraîchissement du token Sheets: {e}"
+                    )
                     creds = None
 
             if not creds:
@@ -81,7 +85,9 @@ class GoogleSheetsConfigLoader:
                         f"Fichier credentials.json non trouvé: {self.credentials_path}\n"
                         "Créez des identifiants OAuth2 et téléchargez le fichier depuis Google Cloud Console."
                     )
-                flow = InstalledAppFlow.from_client_secrets_file(self.credentials_path, SHEETS_SCOPES)
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    self.credentials_path, SHEETS_SCOPES
+                )
                 creds = flow.run_local_server(port=0)
 
             # Save token
@@ -93,7 +99,11 @@ class GoogleSheetsConfigLoader:
     def fetch_rows(self) -> List[FakturennConfigRow]:
         self._ensure_service()
         sheet = self.service.spreadsheets()
-        result = sheet.values().get(spreadsheetId=self.spreadsheet_id, range=self.range_name).execute()
+        result = (
+            sheet.values()
+            .get(spreadsheetId=self.spreadsheet_id, range=self.range_name)
+            .execute()
+        )
         values: List[List[str]] = result.get("values", [])
 
         config_rows: List[FakturennConfigRow] = []

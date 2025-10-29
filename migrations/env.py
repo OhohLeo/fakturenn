@@ -1,11 +1,13 @@
 """Alembic environment configuration."""
 
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-from alembic import context
 import os
 import sys
+from logging.config import fileConfig
+
+from sqlalchemy import engine_from_config, pool
+from alembic import context
+
+from app.db.models import Base
 
 # Add app to path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + "/.."))
@@ -22,7 +24,6 @@ if config.config_file_name is not None:
 # add your model's MetaData object for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from app.db.models import Base
 
 target_metadata = Base.metadata
 

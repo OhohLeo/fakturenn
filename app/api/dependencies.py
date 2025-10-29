@@ -1,13 +1,13 @@
 """FastAPI dependency injection."""
 
 import logging
-from typing import Optional
+from typing import Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import decode_token, TokenData
+from app.api.auth import decode_token
 from app.db.connection import get_db_manager
 from app.db.models import User
 from app.core.vault_client import get_vault_client

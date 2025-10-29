@@ -1,29 +1,50 @@
+[build-system]
+requires = ["flit_core>=3.2"]
+build-backend = "flit_core.buildapi"
+
 [project]
 name = "fakturenn"
 version = "0.0.1"
-description = ""
+description = "Invoice automation and accounting integration for Youn Ha Solena"
 authors = [
     {name = "tresorerie@younhasolena.bzh"}
 ]
 readme = "README.md"
-requires-python = ">=3.12,<4.0"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+
 dependencies = [
-    "beautifulsoup4 (>=4.13.4,<5.0.0)",
-    "lxml (>=6.0.0,<7.0.0)",
-    "requests (>=2.32.4,<3.0.0)",
-    "selenium (>=4.34.2,<5.0.0)",
-    "google-auth (>=2.40.3,<3.0.0)",
-    "google-auth-oauthlib (>=1.2.2,<2.0.0)",
-    "google-auth-httplib2 (>=0.2.0,<0.3.0)",
-    "google-api-python-client (>=2.177.0,<3.0.0)",
-    "ruff (>=0.12.8,<0.13.0)",
-    "marker-pdf (>=1.10.1,<2.0.0)",
+    "beautifulsoup4>=4.13.4",
+    "lxml>=6.0.0",
+    "requests>=2.32.4",
+    "selenium>=4.34.2",
+    "google-auth>=2.40.3",
+    "google-auth-oauthlib>=1.2.2",
+    "google-auth-httplib2>=0.2.0",
+    "google-api-python-client>=2.177.0",
+    "marker-pdf>=1.10.1",
+    # New dependencies for production build
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pydantic[email]>=2.10.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "hvac>=2.3.0",
+    "nats-py>=2.9.0",
+    "ruff>=0.12.8",
 ]
 
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.28.0",
+    "testcontainers[postgresql]>=4.9.0",
+]
 
 [project.scripts]
 fakturenn = "scripts.run_fakturenn:main"

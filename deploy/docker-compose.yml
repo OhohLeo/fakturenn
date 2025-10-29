@@ -1,13 +1,230 @@
+version: "3.9"
+
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: fakturenn-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fakturenn}
+      POSTGRES_USER: ${POSTGRES_USER:-fakturenn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fakturenn}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fakturenn}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fakturenn
+
+  # HashiCorp Vault
+  vault:
+    image: hashicorp/vault:1.15.0
+    container_name: fakturenn-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_ROOT_TOKEN:-root}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    volumes:
+      - vault_data:/vault/data
+      - ./vault/config.hcl:/vault/config/config.hcl
+    ports:
+      - "8200:8200"
+    command: server -dev
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8200/v1/sys/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fakturenn
+
+  # NATS Message Broker with JetStream
+  nats:
+    image: nats:2.10-alpine
+    container_name: fakturenn-nats
+    command: -js -sd /data
+    volumes:
+      - nats_data:/data
+    ports:
+      - "4222:4222"   # Client port
+      - "8222:8222"   # Monitoring port
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fakturenn
+
+  # FastAPI Application
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: fakturenn-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fakturenn}:${POSTGRES_PASSWORD:-fakturenn}@postgres:5432/${POSTGRES_DB:-fakturenn}
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-root}
+      VAULT_DEV_MODE: "true"
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    volumes:
+      - invoice_storage:/app/factures
+      - ../app:/app/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fakturenn
+    restart: unless-stopped
+
+  # Job Coordinator Worker
+  worker-coordinator:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.worker
+    container_name: fakturenn-worker-coordinator
+    command: uv run python -m app.workers.job_coordinator
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fakturenn}:${POSTGRES_PASSWORD:-fakturenn}@postgres:5432/${POSTGRES_DB:-fakturenn}
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-root}
+      VAULT_DEV_MODE: "true"
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - invoice_storage:/app/factures
+      - ../app:/app/app
+    networks:
+      - fakturenn
+    restart: unless-stopped
+
+  # Source Worker (Scraping & PDF Downloads)
+  worker-sources:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.worker
+    container_name: fakturenn-worker-sources
+    command: uv run python -m app.workers.source_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fakturenn}:${POSTGRES_PASSWORD:-fakturenn}@postgres:5432/${POSTGRES_DB:-fakturenn}
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-root}
+      VAULT_DEV_MODE: "true"
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      HEADLESS_MODE: "true"
+    volumes:
+      - invoice_storage:/app/factures
+      - ../app:/app/app
+    networks:
+      - fakturenn
+    restart: unless-stopped
+    deploy:
+      replicas: 2  # Scale for parallel processing
+
+  # Export Worker (Paheko, LocalStorage, GoogleDrive)
+  worker-exports:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.worker
+    container_name: fakturenn-worker-exports
+    command: uv run python -m app.workers.export_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fakturenn}:${POSTGRES_PASSWORD:-fakturenn}@postgres:5432/${POSTGRES_DB:-fakturenn}
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-root}
+      VAULT_DEV_MODE: "true"
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - invoice_storage:/app/factures
+      - ../app:/app/app
+    networks:
+      - fakturenn
+    restart: unless-stopped
+    deploy:
+      replicas: 2  # Scale for parallel exports
+
+  # Paheko Accounting Software
   paheko:
     image: docker.io/paheko/paheko:1.3.16
-    restart: always
+    container_name: fakturenn-paheko
+    environment:
+      ADMIN_EMAIL: ${PAHEKO_ADMIN_EMAIL:-admin@example.com}
     volumes:
       - ./paheko/config.local.php:/var/www/paheko/config.local.php
       - ./paheko/php.ini:/usr/local/etc/php/php.ini
       - paheko_data:/var/www/paheko/data
-      # - /var/www/paheko/data/plugins
     ports:
-      - 8080:80
+      - "8080:80"
+    networks:
+      - fakturenn
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/admin/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
+  postgres_data:
+    driver: local
+  vault_data:
+    driver: local
+  nats_data:
+    driver: local
   paheko_data:
+    driver: local
+  invoice_storage:
+    driver: local
+
+networks:
+  fakturenn:
+    driver: bridge

@@ -33,14 +33,8 @@ docker-compose -f deploy/docker-compose.yml up -d
 # Run API server
 uv run python -m uvicorn app.api.main:app --reload
 
-# Run job coordinator worker
-uv run python scripts/run_job_coordinator.py
-
-# Run source worker
-uv run python scripts/run_source_worker.py
-
-# Run export worker
-uv run python scripts/run_export_worker.py
+# Run unified job worker
+uv run python scripts/run_job_worker.py
 
 # Database migrations
 uv run alembic upgrade head
@@ -60,9 +54,9 @@ uv run pytest tests/ --cov=app  # with coverage
 
 ## Architecture
 
-### Multi-Service Event-Driven Architecture
+### Unified Event-Driven Architecture
 
-Fakturenn uses an event-driven microservices architecture with REST API frontend and async workers:
+Fakturenn uses a simplified event-driven architecture with REST API frontend and a single unified worker:
 
 ```
 User/Client
@@ -71,11 +65,9 @@ FastAPI REST API (app/api/)
     ↓ (triggers job)
 NATS JetStream (message broker)
     ↓
-Job Coordinator Worker
-    ├→ Source Worker (concurrent)
-    │  └→ invokes app/sources/
-    └→ Export Worker (concurrent)
-       └→ invokes app/export/
+Unified Job Worker
+    ├→ Extract from sources (app/sources/)
+    └→ Execute exports (app/export/)
     ↓
 PostgreSQL (state persistence)
     ↓
@@ -93,23 +85,17 @@ External Systems (Paheko, Google Drive, Local FS)
    - REST endpoint creates Job in database
    - Publishes `JobStartedEvent` to NATS
 
-3. **Job Coordinator Worker** (`app/workers/job_coordinator.py`)
+3. **Unified Job Worker** (`app/workers/job_worker.py`)
    - Subscribes to JobStartedEvent
-   - Loads automation and all active sources
-   - Publishes SourceExecuteEvent for each source
-   - Tracks job progress and publishes JobCompletedEvent/JobFailedEvent
-
-4. **Source Worker** (`app/workers/source_worker.py` - in progress)
-   - Subscribes to SourceExecuteEvent
-   - Executes source-specific extraction (Free/FreeMobile/Gmail)
-   - Downloads PDF and extracts metadata
-   - Publishes ExportExecuteEvent for mapped exports
-
-5. **Export Worker** (`app/workers/export_worker.py` - in progress)
-   - Subscribes to ExportExecuteEvent
-   - Executes export handler (Paheko/LocalStorage/GoogleDrive)
-   - Publishes ExportCompletedEvent/ExportFailedEvent
-   - Stores export history and external reference
+   - Loads automation, sources, exports, and mappings
+   - For each active source:
+     - Executes source-specific extraction (Free/FreeMobile/Gmail)
+     - Downloads PDFs and extracts metadata
+   - For each extracted invoice and mapped export:
+     - Executes export handler (Paheko/LocalStorage/GoogleDrive)
+     - Creates export history record with results
+   - Publishes JobCompletedEvent or JobFailedEvent when done
+   - Stores job statistics (sources_executed, invoices_extracted, exports_completed)
 
 ### Key Components
 
@@ -127,7 +113,7 @@ External Systems (Paheko, Google Drive, Local FS)
 
 #### NATS (`app/nats/`)
 - **`client.py`**: NatsClientWrapper with JetStream support, stream/consumer management
-- **`messages.py`**: Pydantic event schemas (JobStartedEvent, SourceExecuteEvent, ExportExecuteEvent, etc.)
+- **`messages.py`**: Pydantic event schemas (JobStartedEvent, JobCompletedEvent, JobFailedEvent)
 
 #### Export Handlers (`app/export/`)
 - **`base.py`**: Abstract ExportHandler interface and factory function
@@ -143,9 +129,7 @@ External Systems (Paheko, Google Drive, Local FS)
 - **`logging_config.py`**: Structured JSON logging configuration
 
 #### Workers (`app/workers/`)
-- **`job_coordinator.py`**: Orchestrates job execution and tracks progress
-- **`source_worker.py`**: (in progress) Executes source extraction and publishes export events
-- **`export_worker.py`**: (in progress) Executes export handlers and publishes completion events
+- **`job_worker.py`**: Unified worker that executes complete job workflows (source extraction + export execution)
 
 #### Sources (`app/sources/`)
 - **`invoice.py`**: `Invoice` dataclass - universal representation
@@ -159,11 +143,15 @@ External Systems (Paheko, Google Drive, Local FS)
 1. User creates automation with source (Gmail) and exports (Paheko + LocalStorage)
 2. User triggers job via `POST /automations/1/trigger`
 3. API creates Job and publishes JobStartedEvent
-4. Job Coordinator receives event, fetches automation/sources, publishes SourceExecuteEvent
-5. Source Worker receives event, extracts invoices from Gmail, publishes ExportExecuteEvent
-6. Export Worker receives event twice (for Paheko and LocalStorage), exports PDFs
-7. Workers publish ExportCompletedEvent for each, Coordinator aggregates and publishes JobCompletedEvent
-8. Job status updated to "completed", export history recorded with external references
+4. Job Worker receives JobStartedEvent
+5. Job Worker loads automation and executes:
+   - Extract invoices from Gmail source
+   - For each invoice × mapped export (2 mappings = Paheko + LocalStorage):
+     - Execute Paheko export
+     - Execute LocalStorage export
+     - Record export history
+6. Job Worker publishes JobCompletedEvent with statistics
+7. Job status updated to "completed", export history contains all results
 
 ## Configuration
 
@@ -246,7 +234,7 @@ Key variables loaded from `.env`:
 
 ## Docker Deployment
 
-Complete stack deployment with 8 services:
+Complete stack deployment with 6 services:
 
 ```bash
 cd deploy
@@ -275,20 +263,12 @@ docker-compose up -d
    - Health check on `GET /health`
    - Depends on PostgreSQL, Vault, NATS
 
-5. **Job Coordinator Worker** (`Dockerfile.worker`)
+5. **Job Worker** (`Dockerfile.worker`)
    - Subscribes to `job.started` events
-   - Orchestrates source and export workers
-
-6. **Source Worker** (`Dockerfile.worker`)
-   - Subscribes to `source.execute` events
-   - Executes source extraction logic
+   - Executes source extraction and export handling in single process
    - Includes Chromium/ChromeDriver for Selenium
 
-7. **Export Worker** (`Dockerfile.worker`)
-   - Subscribes to `export.execute` events
-   - Executes export handlers
-
-8. **Paheko 1.3.16** (`paheko/paheko:1.3.16`)
+6. **Paheko 1.3.16** (`paheko/paheko:1.3.16`)
    - Port: `8080`
    - Configuration: `deploy/paheko/config.local.php`
    - Database: PostgreSQL via docker-compose

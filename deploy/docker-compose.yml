@@ -81,7 +81,7 @@ services:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-root}
       VAULT_DEV_MODE: "true"
-      NATS_URL: nats://nats:4222
+      NATS_SERVERS: nats://nats:4222
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8000:8000"
@@ -97,13 +97,13 @@ services:
       - fakturenn
     restart: unless-stopped
 
-  # Job Coordinator Worker
-  worker-coordinator:
+  # Job Worker (Unified: source extraction + export execution)
+  job-worker:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.worker
-    container_name: fakturenn-worker-coordinator
-    command: uv run python -m app.workers.job_coordinator
+    container_name: fakturenn-job-worker
+    command: uv run python scripts/run_job_worker.py
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,37 +118,7 @@ services:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-root}
       VAULT_DEV_MODE: "true"
-      NATS_URL: nats://nats:4222
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    volumes:
-      - invoice_storage:/app/factures
-      - ../app:/app/app
-    networks:
-      - fakturenn
-    restart: unless-stopped
-
-  # Source Worker (Scraping & PDF Downloads)
-  worker-sources:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.worker
-    container_name: fakturenn-worker-sources
-    command: uv run python -m app.workers.source_worker
-    depends_on:
-      postgres:
-        condition: service_healthy
-      vault:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-      api:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fakturenn}:${POSTGRES_PASSWORD:-fakturenn}@postgres:5432/${POSTGRES_DB:-fakturenn}
-      VAULT_ADDR: http://vault:8200
-      VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-root}
-      VAULT_DEV_MODE: "true"
-      NATS_URL: nats://nats:4222
+      NATS_SERVERS: nats://nats:4222
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       HEADLESS_MODE: "true"
     volumes:
@@ -157,40 +127,6 @@ services:
     networks:
       - fakturenn
     restart: unless-stopped
-    deploy:
-      replicas: 2  # Scale for parallel processing
-
-  # Export Worker (Paheko, LocalStorage, GoogleDrive)
-  worker-exports:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.worker
-    container_name: fakturenn-worker-exports
-    command: uv run python -m app.workers.export_worker
-    depends_on:
-      postgres:
-        condition: service_healthy
-      vault:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-      api:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fakturenn}:${POSTGRES_PASSWORD:-fakturenn}@postgres:5432/${POSTGRES_DB:-fakturenn}
-      VAULT_ADDR: http://vault:8200
-      VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-root}
-      VAULT_DEV_MODE: "true"
-      NATS_URL: nats://nats:4222
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    volumes:
-      - invoice_storage:/app/factures
-      - ../app:/app/app
-    networks:
-      - fakturenn
-    restart: unless-stopped
-    deploy:
-      replicas: 2  # Scale for parallel exports
 
   # Paheko Accounting Software
   paheko:

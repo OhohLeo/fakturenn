@@ -1,9 +1,7 @@
 """Pytest configuration and fixtures."""
 
 import asyncio
-from datetime import timedelta
 
-import pytest
 from pytest_asyncio import fixture
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -119,5 +117,3 @@ async def test_admin_token(test_admin_user: User) -> str:
         language=test_admin_user.language,
     )
     return create_access_token(token_data)
-
-

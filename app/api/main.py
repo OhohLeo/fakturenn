@@ -1,6 +1,7 @@
 """FastAPI application factory and configuration."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -19,6 +20,7 @@ def create_app(
     vault_role_id: str = None,
     vault_secret_id: str = None,
     vault_dev_mode: bool = False,
+    nats_servers: str = None,
 ) -> FastAPI:
     """Create and configure FastAPI application.
 
@@ -28,6 +30,7 @@ def create_app(
         vault_role_id: Vault AppRole role_id
         vault_secret_id: Vault AppRole secret_id
         vault_dev_mode: Use Vault dev mode
+        nats_servers: Comma-separated NATS server URLs
 
     Returns:
         Configured FastAPI application
@@ -43,14 +46,39 @@ def create_app(
     # Initialize Vault
     init_vault(vault_addr, vault_role_id, vault_secret_id, vault_dev_mode)
 
+    # Parse NATS servers
+    nats_servers_str = nats_servers or os.getenv(
+        "NATS_SERVERS", "nats://localhost:4222"
+    )
+    nats_server_list = [s.strip() for s in nats_servers_str.split(",")]
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Manage app lifecycle."""
         logger.info("Starting Fakturenn API")
+
+        # Initialize NATS
+        from app.nats import init_nats_client, close_nats_client
+
+        try:
+            await init_nats_client(nats_server_list)
+            logger.info("NATS client initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize NATS client: {e}")
+            raise
+
         yield
+
         logger.info("Shutting down Fakturenn API")
         db_manager = get_db_manager()
         await db_manager.close()
+
+        # Close NATS client
+        try:
+            await close_nats_client()
+            logger.info("NATS client closed")
+        except Exception as e:
+            logger.error(f"Failed to close NATS client: {e}")
 
     app = FastAPI(
         title="Fakturenn API",

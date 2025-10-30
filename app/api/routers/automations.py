@@ -274,8 +274,25 @@ async def trigger_automation(
         f"Job {job.id} triggered for automation '{automation.name}' by {current_user.username}"
     )
 
-    # TODO: Publish job trigger event to NATS
-    # nats_client.publish("fakturenn.jobs.trigger", job_data)
+    # Publish job started event to NATS
+    try:
+        from app.nats import get_nats_client, JobStartedEvent
+
+        nats_client = get_nats_client()
+        event = JobStartedEvent(
+            job_id=job.id,
+            automation_id=automation_id,
+            user_id=current_user.id,
+            from_date=from_date,
+            max_results=max_results,
+        )
+        await nats_client.publish(
+            "job.started",
+            event.model_dump(mode="json"),
+        )
+        logger.info(f"Published job started event for job {job.id}")
+    except Exception as e:
+        logger.error(f"Failed to publish job started event: {e}", exc_info=True)
 
     return {"job_id": job.id, "status": "pending"}
 

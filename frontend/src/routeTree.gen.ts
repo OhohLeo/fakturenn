@@ -15,9 +15,14 @@ import { Route as RecoverPasswordRouteImport } from './routes/recover-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutWorkflowsRouteImport } from './routes/_layout/workflows'
+import { Route as LayoutSourcesRouteImport } from './routes/_layout/sources'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
-import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
+import { Route as LayoutRecordsRouteImport } from './routes/_layout/records'
+import { Route as LayoutJobsRouteImport } from './routes/_layout/jobs'
+import { Route as LayoutExportersRouteImport } from './routes/_layout/exporters'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutWorkflowsWorkflowIdRouteImport } from './routes/_layout/workflows_.$workflowId'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -48,14 +53,34 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutWorkflowsRoute = LayoutWorkflowsRouteImport.update({
+  id: '/workflows',
+  path: '/workflows',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutSourcesRoute = LayoutSourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutItemsRoute = LayoutItemsRouteImport.update({
-  id: '/items',
-  path: '/items',
+const LayoutRecordsRoute = LayoutRecordsRouteImport.update({
+  id: '/records',
+  path: '/records',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutJobsRoute = LayoutJobsRouteImport.update({
+  id: '/jobs',
+  path: '/jobs',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutExportersRoute = LayoutExportersRouteImport.update({
+  id: '/exporters',
+  path: '/exporters',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutAdminRoute = LayoutAdminRouteImport.update({
@@ -63,6 +88,12 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutWorkflowsWorkflowIdRoute =
+  LayoutWorkflowsWorkflowIdRouteImport.update({
+    id: '/workflows_/$workflowId',
+    path: '/workflows/$workflowId',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
@@ -70,9 +101,14 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/items': typeof LayoutItemsRoute
+  '/exporters': typeof LayoutExportersRoute
+  '/jobs': typeof LayoutJobsRoute
+  '/records': typeof LayoutRecordsRoute
   '/settings': typeof LayoutSettingsRoute
+  '/sources': typeof LayoutSourcesRoute
+  '/workflows': typeof LayoutWorkflowsRoute
   '/': typeof LayoutIndexRoute
+  '/workflows/$workflowId': typeof LayoutWorkflowsWorkflowIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -80,9 +116,14 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/items': typeof LayoutItemsRoute
+  '/exporters': typeof LayoutExportersRoute
+  '/jobs': typeof LayoutJobsRoute
+  '/records': typeof LayoutRecordsRoute
   '/settings': typeof LayoutSettingsRoute
+  '/sources': typeof LayoutSourcesRoute
+  '/workflows': typeof LayoutWorkflowsRoute
   '/': typeof LayoutIndexRoute
+  '/workflows/$workflowId': typeof LayoutWorkflowsWorkflowIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -92,9 +133,14 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/_layout/admin': typeof LayoutAdminRoute
-  '/_layout/items': typeof LayoutItemsRoute
+  '/_layout/exporters': typeof LayoutExportersRoute
+  '/_layout/jobs': typeof LayoutJobsRoute
+  '/_layout/records': typeof LayoutRecordsRoute
   '/_layout/settings': typeof LayoutSettingsRoute
+  '/_layout/sources': typeof LayoutSourcesRoute
+  '/_layout/workflows': typeof LayoutWorkflowsRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/workflows_/$workflowId': typeof LayoutWorkflowsWorkflowIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -104,9 +150,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
-    | '/items'
+    | '/exporters'
+    | '/jobs'
+    | '/records'
     | '/settings'
+    | '/sources'
+    | '/workflows'
     | '/'
+    | '/workflows/$workflowId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -114,9 +165,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
-    | '/items'
+    | '/exporters'
+    | '/jobs'
+    | '/records'
     | '/settings'
+    | '/sources'
+    | '/workflows'
     | '/'
+    | '/workflows/$workflowId'
   id:
     | '__root__'
     | '/_layout'
@@ -125,9 +181,14 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/_layout/admin'
-    | '/_layout/items'
+    | '/_layout/exporters'
+    | '/_layout/jobs'
+    | '/_layout/records'
     | '/_layout/settings'
+    | '/_layout/sources'
+    | '/_layout/workflows'
     | '/_layout/'
+    | '/_layout/workflows_/$workflowId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -182,6 +243,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/workflows': {
+      id: '/_layout/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof LayoutWorkflowsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/sources': {
+      id: '/_layout/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof LayoutSourcesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/settings': {
       id: '/_layout/settings'
       path: '/settings'
@@ -189,11 +264,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSettingsRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/items': {
-      id: '/_layout/items'
-      path: '/items'
-      fullPath: '/items'
-      preLoaderRoute: typeof LayoutItemsRouteImport
+    '/_layout/records': {
+      id: '/_layout/records'
+      path: '/records'
+      fullPath: '/records'
+      preLoaderRoute: typeof LayoutRecordsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/jobs': {
+      id: '/_layout/jobs'
+      path: '/jobs'
+      fullPath: '/jobs'
+      preLoaderRoute: typeof LayoutJobsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/exporters': {
+      id: '/_layout/exporters'
+      path: '/exporters'
+      fullPath: '/exporters'
+      preLoaderRoute: typeof LayoutExportersRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/admin': {
@@ -203,21 +292,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/workflows_/$workflowId': {
+      id: '/_layout/workflows_/$workflowId'
+      path: '/workflows/$workflowId'
+      fullPath: '/workflows/$workflowId'
+      preLoaderRoute: typeof LayoutWorkflowsWorkflowIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
-  LayoutItemsRoute: typeof LayoutItemsRoute
+  LayoutExportersRoute: typeof LayoutExportersRoute
+  LayoutJobsRoute: typeof LayoutJobsRoute
+  LayoutRecordsRoute: typeof LayoutRecordsRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
+  LayoutSourcesRoute: typeof LayoutSourcesRoute
+  LayoutWorkflowsRoute: typeof LayoutWorkflowsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutWorkflowsWorkflowIdRoute: typeof LayoutWorkflowsWorkflowIdRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
-  LayoutItemsRoute: LayoutItemsRoute,
+  LayoutExportersRoute: LayoutExportersRoute,
+  LayoutJobsRoute: LayoutJobsRoute,
+  LayoutRecordsRoute: LayoutRecordsRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
+  LayoutSourcesRoute: LayoutSourcesRoute,
+  LayoutWorkflowsRoute: LayoutWorkflowsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutWorkflowsWorkflowIdRoute: LayoutWorkflowsWorkflowIdRoute,
 }
 
 const LayoutRouteWithChildren =

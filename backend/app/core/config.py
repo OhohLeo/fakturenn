@@ -94,6 +94,20 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
 
+    # MinIO/S3 Storage
+    MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET: str = "fakturenn-invoices"
+    MINIO_SECURE: bool = False
+
+    # Vault (HashiCorp)
+    VAULT_URL: str = "http://vault:8200"
+    VAULT_TOKEN: str = "dev-token"
+
+    # NATS JetStream
+    NATS_URL: str = "nats://nats:4222"
+
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (

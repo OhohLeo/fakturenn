@@ -9,6 +9,61 @@ export type Body_login_login_access_token = {
     client_secret?: (string | null);
 };
 
+/**
+ * Properties for exporter creation
+ */
+export type ExporterCreate = {
+    name: string;
+    type: ExporterType;
+    is_active?: boolean;
+    workflow_id: string;
+    config?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * Exporter properties returned via API
+ */
+export type ExporterPublic = {
+    name: string;
+    type: ExporterType;
+    is_active?: boolean;
+    id: string;
+    workflow_id: string;
+    config?: ({
+    [key: string]: unknown;
+} | null);
+    error_context?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * List of exporters with count
+ */
+export type ExportersPublic = {
+    data: Array<ExporterPublic>;
+    count: number;
+};
+
+/**
+ * Types of export destinations
+ */
+export type ExporterType = 'paheko' | 'gdrive';
+
+/**
+ * Properties for exporter update
+ */
+export type ExporterUpdate = {
+    name?: (string | null);
+    type?: (ExporterType | null);
+    config?: ({
+    [key: string]: unknown;
+} | null);
+    is_active?: (boolean | null);
+};
+
 export type HTTPValidationError = {
     detail?: Array<ValidationError>;
 };
@@ -35,6 +90,88 @@ export type ItemUpdate = {
     description?: (string | null);
 };
 
+/**
+ * Job properties returned via API
+ */
+export type JobPublic = {
+    status?: JobStatus;
+    id: string;
+    source_id: string;
+    scheduled_at?: (string | null);
+    started_at?: (string | null);
+    error_context?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * List of jobs with count
+ */
+export type JobsPublic = {
+    data: Array<JobPublic>;
+    count: number;
+};
+
+/**
+ * Status of a job
+ */
+export type JobStatus = 'queued' | 'running' | 'success' | 'failed';
+
+/**
+ * Properties for mapper creation
+ */
+export type MapperCreate = {
+    name: string;
+    mapper_type: MapperType;
+    is_active?: boolean;
+    exporter_id: string;
+    transformation_logic?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * Mapper properties returned via API
+ */
+export type MapperPublic = {
+    name: string;
+    mapper_type: MapperType;
+    is_active?: boolean;
+    id: string;
+    exporter_id: string;
+    transformation_logic?: ({
+    [key: string]: unknown;
+} | null);
+    error_context?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * List of mappers with count
+ */
+export type MappersPublic = {
+    data: Array<MapperPublic>;
+    count: number;
+};
+
+/**
+ * Types of mappers
+ */
+export type MapperType = 'record2paheko' | 'record2gdrive';
+
+/**
+ * Properties for mapper update
+ */
+export type MapperUpdate = {
+    name?: (string | null);
+    mapper_type?: (MapperType | null);
+    transformation_logic?: ({
+    [key: string]: unknown;
+} | null);
+    is_active?: (boolean | null);
+};
+
 export type Message = {
     message: string;
 };
@@ -44,11 +181,174 @@ export type NewPassword = {
     new_password: string;
 };
 
+/**
+ * Properties for parser creation
+ */
+export type ParserCreate = {
+    name: string;
+    engine_type: ParserEngineType;
+    is_active?: boolean;
+    source_id: string;
+    rules?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * Types of parser engines
+ */
+export type ParserEngineType = 'mail2record' | 'xls2record' | 'free2record' | 'ai_model';
+
+/**
+ * Parser properties returned via API
+ */
+export type ParserPublic = {
+    name: string;
+    engine_type: ParserEngineType;
+    is_active?: boolean;
+    id: string;
+    source_id: string;
+    rules?: ({
+    [key: string]: unknown;
+} | null);
+    error_context?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * List of parsers with count
+ */
+export type ParsersPublic = {
+    data: Array<ParserPublic>;
+    count: number;
+};
+
+/**
+ * Properties for parser update
+ */
+export type ParserUpdate = {
+    name?: (string | null);
+    engine_type?: (ParserEngineType | null);
+    rules?: ({
+    [key: string]: unknown;
+} | null);
+    is_active?: (boolean | null);
+};
+
 export type PrivateUserCreate = {
     email: string;
     password: string;
     full_name: string;
     is_verified?: boolean;
+};
+
+/**
+ * Record properties returned via API
+ */
+export type RecordPublic = {
+    date: string;
+    status?: RecordStatus;
+    id: string;
+    source_id: string;
+    workflow_id: string;
+    data?: ({
+    [key: string]: unknown;
+} | null);
+    file_path?: (string | null);
+    file_hash?: (string | null);
+    unique_key: string;
+    error_context?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * List of records with count
+ */
+export type RecordsPublic = {
+    data: Array<RecordPublic>;
+    count: number;
+};
+
+/**
+ * Status of a record
+ */
+export type RecordStatus = 'pending' | 'processing' | 'success' | 'failed' | 'exported';
+
+/**
+ * Properties for record update
+ */
+export type RecordUpdate = {
+    status?: (RecordStatus | null);
+    data?: ({
+    [key: string]: unknown;
+} | null);
+    file_path?: (string | null);
+    file_hash?: (string | null);
+    error_context?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * Properties for source creation
+ */
+export type SourceCreate = {
+    name: string;
+    type: SourceType;
+    crontab?: (string | null);
+    is_active?: boolean;
+    workflow_id: string;
+    config?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * Source properties returned via API
+ */
+export type SourcePublic = {
+    name: string;
+    type: SourceType;
+    crontab?: (string | null);
+    is_active?: boolean;
+    id: string;
+    workflow_id: string;
+    config?: ({
+    [key: string]: unknown;
+} | null);
+    sync_cursor?: (string | null);
+    last_sync_at?: (string | null);
+    error_context?: ({
+    [key: string]: unknown;
+} | null);
+};
+
+/**
+ * List of sources with count
+ */
+export type SourcesPublic = {
+    data: Array<SourcePublic>;
+    count: number;
+};
+
+/**
+ * Types of invoice sources
+ */
+export type SourceType = 'gmail' | 'xls' | 'free' | 'free_mobile';
+
+/**
+ * Properties for source update
+ */
+export type SourceUpdate = {
+    name?: (string | null);
+    type?: (SourceType | null);
+    config?: ({
+    [key: string]: unknown;
+} | null);
+    crontab?: (string | null);
+    is_active?: (boolean | null);
 };
 
 export type Token = {
@@ -107,6 +407,115 @@ export type ValidationError = {
     type: string;
 };
 
+/**
+ * Properties for workflow creation
+ */
+export type WorkflowCreate = {
+    name: string;
+};
+
+/**
+ * Workflow properties returned via API
+ */
+export type WorkflowPublic = {
+    name: string;
+    id: string;
+    user_id: string;
+};
+
+/**
+ * List of workflows with count
+ */
+export type WorkflowsPublic = {
+    data: Array<WorkflowPublic>;
+    count: number;
+};
+
+/**
+ * Properties for workflow update
+ */
+export type WorkflowUpdate = {
+    name?: (string | null);
+};
+
+export type ExportersReadAllExportersData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type ExportersReadAllExportersResponse = (ExportersPublic);
+
+export type ExportersReadExportersData = {
+    limit?: number;
+    skip?: number;
+    workflowId: string;
+};
+
+export type ExportersReadExportersResponse = (ExportersPublic);
+
+export type ExportersCreateExporterData = {
+    requestBody: ExporterCreate;
+    workflowId: string;
+};
+
+export type ExportersCreateExporterResponse = (ExporterPublic);
+
+export type ExportersReadExporterData = {
+    id: string;
+};
+
+export type ExportersReadExporterResponse = (ExporterPublic);
+
+export type ExportersUpdateExporterData = {
+    id: string;
+    requestBody: ExporterUpdate;
+};
+
+export type ExportersUpdateExporterResponse = (ExporterPublic);
+
+export type ExportersDeleteExporterData = {
+    id: string;
+};
+
+export type ExportersDeleteExporterResponse = (Message);
+
+export type ExportersReadMappersData = {
+    exporterId: string;
+    limit?: number;
+    skip?: number;
+};
+
+export type ExportersReadMappersResponse = (MappersPublic);
+
+export type ExportersCreateMapperData = {
+    exporterId: string;
+    requestBody: MapperCreate;
+};
+
+export type ExportersCreateMapperResponse = (MapperPublic);
+
+export type ExportersReadMapperData = {
+    exporterId: string;
+    mapperId: string;
+};
+
+export type ExportersReadMapperResponse = (MapperPublic);
+
+export type ExportersUpdateMapperData = {
+    exporterId: string;
+    mapperId: string;
+    requestBody: MapperUpdate;
+};
+
+export type ExportersUpdateMapperResponse = (MapperPublic);
+
+export type ExportersDeleteMapperData = {
+    exporterId: string;
+    mapperId: string;
+};
+
+export type ExportersDeleteMapperResponse = (Message);
+
 export type ItemsReadItemsData = {
     limit?: number;
     skip?: number;
@@ -139,6 +548,50 @@ export type ItemsDeleteItemData = {
 
 export type ItemsDeleteItemResponse = (Message);
 
+export type JobsReadJobsBySourceData = {
+    limit?: number;
+    skip?: number;
+    sourceId: string;
+    status?: (JobStatus | null);
+};
+
+export type JobsReadJobsBySourceResponse = (JobsPublic);
+
+export type JobsReadJobsByWorkflowData = {
+    limit?: number;
+    skip?: number;
+    status?: (JobStatus | null);
+    workflowId: string;
+};
+
+export type JobsReadJobsByWorkflowResponse = (JobsPublic);
+
+export type JobsReadJobData = {
+    id: string;
+};
+
+export type JobsReadJobResponse = (JobPublic);
+
+export type JobsDeleteJobData = {
+    id: string;
+};
+
+export type JobsDeleteJobResponse = (Message);
+
+export type JobsTriggerJobData = {
+    sourceId: string;
+};
+
+export type JobsTriggerJobResponse = (JobPublic);
+
+export type JobsReadAllJobsData = {
+    limit?: number;
+    skip?: number;
+    status?: (JobStatus | null);
+};
+
+export type JobsReadAllJobsResponse = (JobsPublic);
+
 export type LoginLoginAccessTokenData = {
     formData: Body_login_login_access_token;
 };
@@ -170,6 +623,160 @@ export type PrivateCreateUserData = {
 };
 
 export type PrivateCreateUserResponse = (UserPublic);
+
+export type RecordsReadRecordsByWorkflowData = {
+    limit?: number;
+    skip?: number;
+    sourceId?: (string | null);
+    status?: (RecordStatus | null);
+    workflowId: string;
+};
+
+export type RecordsReadRecordsByWorkflowResponse = (RecordsPublic);
+
+export type RecordsReadRecordsBySourceData = {
+    limit?: number;
+    skip?: number;
+    sourceId: string;
+    status?: (RecordStatus | null);
+};
+
+export type RecordsReadRecordsBySourceResponse = (RecordsPublic);
+
+export type RecordsReadRecordData = {
+    id: string;
+};
+
+export type RecordsReadRecordResponse = (RecordPublic);
+
+export type RecordsUpdateRecordData = {
+    id: string;
+    requestBody: RecordUpdate;
+};
+
+export type RecordsUpdateRecordResponse = (RecordPublic);
+
+export type RecordsDeleteRecordData = {
+    id: string;
+};
+
+export type RecordsDeleteRecordResponse = (Message);
+
+export type RecordsReadAllRecordsData = {
+    limit?: number;
+    skip?: number;
+    status?: (RecordStatus | null);
+    workflowIds?: (Array<(string)> | null);
+};
+
+export type RecordsReadAllRecordsResponse = (RecordsPublic);
+
+export type SchemasListSchemasData = {
+    entityType?: (string | null);
+};
+
+export type SchemasListSchemasResponse = (Array<{
+    [key: string]: (string);
+}>);
+
+export type SchemasGetSchemaData = {
+    entityType: string;
+    providerType: string;
+};
+
+export type SchemasGetSchemaResponse = ({
+    [key: string]: unknown;
+});
+
+export type SchemasValidateConfigData = {
+    entityType: string;
+    providerType: string;
+    requestBody: {
+        [key: string]: unknown;
+    };
+};
+
+export type SchemasValidateConfigResponse = ({
+    [key: string]: (string);
+});
+
+export type SourcesReadAllSourcesData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type SourcesReadAllSourcesResponse = (SourcesPublic);
+
+export type SourcesReadSourcesData = {
+    limit?: number;
+    skip?: number;
+    workflowId: string;
+};
+
+export type SourcesReadSourcesResponse = (SourcesPublic);
+
+export type SourcesCreateSourceData = {
+    requestBody: SourceCreate;
+    workflowId: string;
+};
+
+export type SourcesCreateSourceResponse = (SourcePublic);
+
+export type SourcesReadSourceData = {
+    id: string;
+};
+
+export type SourcesReadSourceResponse = (SourcePublic);
+
+export type SourcesUpdateSourceData = {
+    id: string;
+    requestBody: SourceUpdate;
+};
+
+export type SourcesUpdateSourceResponse = (SourcePublic);
+
+export type SourcesDeleteSourceData = {
+    id: string;
+};
+
+export type SourcesDeleteSourceResponse = (Message);
+
+export type SourcesReadParsersData = {
+    limit?: number;
+    skip?: number;
+    sourceId: string;
+};
+
+export type SourcesReadParsersResponse = (ParsersPublic);
+
+export type SourcesCreateParserData = {
+    requestBody: ParserCreate;
+    sourceId: string;
+};
+
+export type SourcesCreateParserResponse = (ParserPublic);
+
+export type SourcesReadParserData = {
+    parserId: string;
+    sourceId: string;
+};
+
+export type SourcesReadParserResponse = (ParserPublic);
+
+export type SourcesUpdateParserData = {
+    parserId: string;
+    requestBody: ParserUpdate;
+    sourceId: string;
+};
+
+export type SourcesUpdateParserResponse = (ParserPublic);
+
+export type SourcesDeleteParserData = {
+    parserId: string;
+    sourceId: string;
+};
+
+export type SourcesDeleteParserResponse = (Message);
 
 export type UsersReadUsersData = {
     limit?: number;
@@ -232,3 +839,35 @@ export type UtilsTestEmailData = {
 export type UtilsTestEmailResponse = (Message);
 
 export type UtilsHealthCheckResponse = (boolean);
+
+export type WorkflowsReadWorkflowsData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type WorkflowsReadWorkflowsResponse = (WorkflowsPublic);
+
+export type WorkflowsCreateWorkflowData = {
+    requestBody: WorkflowCreate;
+};
+
+export type WorkflowsCreateWorkflowResponse = (WorkflowPublic);
+
+export type WorkflowsReadWorkflowData = {
+    id: string;
+};
+
+export type WorkflowsReadWorkflowResponse = (WorkflowPublic);
+
+export type WorkflowsUpdateWorkflowData = {
+    id: string;
+    requestBody: WorkflowUpdate;
+};
+
+export type WorkflowsUpdateWorkflowResponse = (WorkflowPublic);
+
+export type WorkflowsDeleteWorkflowData = {
+    id: string;
+};
+
+export type WorkflowsDeleteWorkflowResponse = (Message);

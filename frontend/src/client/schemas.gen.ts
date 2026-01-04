@@ -55,6 +55,184 @@ export const Body_login_login_access_tokenSchema = {
     title: 'Body_login-login_access_token'
 } as const;
 
+export const ExporterCreateSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        type: {
+            '$ref': '#/components/schemas/ExporterType'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: true
+        },
+        workflow_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Workflow Id'
+        },
+        config: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Config'
+        }
+    },
+    type: 'object',
+    required: ['name', 'type', 'workflow_id'],
+    title: 'ExporterCreate',
+    description: 'Properties for exporter creation'
+} as const;
+
+export const ExporterPublicSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        type: {
+            '$ref': '#/components/schemas/ExporterType'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: true
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        workflow_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Workflow Id'
+        },
+        config: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Config'
+        },
+        error_context: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Context'
+        }
+    },
+    type: 'object',
+    required: ['name', 'type', 'id', 'workflow_id'],
+    title: 'ExporterPublic',
+    description: 'Exporter properties returned via API'
+} as const;
+
+export const ExporterTypeSchema = {
+    type: 'string',
+    enum: ['paheko', 'gdrive'],
+    title: 'ExporterType',
+    description: 'Types of export destinations'
+} as const;
+
+export const ExporterUpdateSchema = {
+    properties: {
+        name: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 255,
+                    minLength: 1
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Name'
+        },
+        type: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/ExporterType'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        config: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Config'
+        },
+        is_active: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Is Active'
+        }
+    },
+    type: 'object',
+    title: 'ExporterUpdate',
+    description: 'Properties for exporter update'
+} as const;
+
+export const ExportersPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/ExporterPublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'ExportersPublic',
+    description: 'List of exporters with count'
+} as const;
+
 export const HTTPValidationErrorSchema = {
     properties: {
         detail: {
@@ -182,6 +360,270 @@ export const ItemsPublicSchema = {
     title: 'ItemsPublic'
 } as const;
 
+export const JobPublicSchema = {
+    properties: {
+        status: {
+            '$ref': '#/components/schemas/JobStatus',
+            default: 'queued'
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        source_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Source Id'
+        },
+        scheduled_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Scheduled At'
+        },
+        started_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Started At'
+        },
+        error_context: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Context'
+        }
+    },
+    type: 'object',
+    required: ['id', 'source_id'],
+    title: 'JobPublic',
+    description: 'Job properties returned via API'
+} as const;
+
+export const JobStatusSchema = {
+    type: 'string',
+    enum: ['queued', 'running', 'success', 'failed'],
+    title: 'JobStatus',
+    description: 'Status of a job'
+} as const;
+
+export const JobsPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/JobPublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'JobsPublic',
+    description: 'List of jobs with count'
+} as const;
+
+export const MapperCreateSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        mapper_type: {
+            '$ref': '#/components/schemas/MapperType'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: true
+        },
+        exporter_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Exporter Id'
+        },
+        transformation_logic: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Transformation Logic'
+        }
+    },
+    type: 'object',
+    required: ['name', 'mapper_type', 'exporter_id'],
+    title: 'MapperCreate',
+    description: 'Properties for mapper creation'
+} as const;
+
+export const MapperPublicSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        mapper_type: {
+            '$ref': '#/components/schemas/MapperType'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: true
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        exporter_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Exporter Id'
+        },
+        transformation_logic: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Transformation Logic'
+        },
+        error_context: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Context'
+        }
+    },
+    type: 'object',
+    required: ['name', 'mapper_type', 'id', 'exporter_id'],
+    title: 'MapperPublic',
+    description: 'Mapper properties returned via API'
+} as const;
+
+export const MapperTypeSchema = {
+    type: 'string',
+    enum: ['record2paheko', 'record2gdrive'],
+    title: 'MapperType',
+    description: 'Types of mappers'
+} as const;
+
+export const MapperUpdateSchema = {
+    properties: {
+        name: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 255,
+                    minLength: 1
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Name'
+        },
+        mapper_type: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/MapperType'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        transformation_logic: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Transformation Logic'
+        },
+        is_active: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Is Active'
+        }
+    },
+    type: 'object',
+    title: 'MapperUpdate',
+    description: 'Properties for mapper update'
+} as const;
+
+export const MappersPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/MapperPublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'MappersPublic',
+    description: 'List of mappers with count'
+} as const;
+
 export const MessageSchema = {
     properties: {
         message: {
@@ -212,6 +654,184 @@ export const NewPasswordSchema = {
     title: 'NewPassword'
 } as const;
 
+export const ParserCreateSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        engine_type: {
+            '$ref': '#/components/schemas/ParserEngineType'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: true
+        },
+        source_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Source Id'
+        },
+        rules: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Rules'
+        }
+    },
+    type: 'object',
+    required: ['name', 'engine_type', 'source_id'],
+    title: 'ParserCreate',
+    description: 'Properties for parser creation'
+} as const;
+
+export const ParserEngineTypeSchema = {
+    type: 'string',
+    enum: ['mail2record', 'xls2record', 'free2record', 'ai_model'],
+    title: 'ParserEngineType',
+    description: 'Types of parser engines'
+} as const;
+
+export const ParserPublicSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        engine_type: {
+            '$ref': '#/components/schemas/ParserEngineType'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: true
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        source_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Source Id'
+        },
+        rules: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Rules'
+        },
+        error_context: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Context'
+        }
+    },
+    type: 'object',
+    required: ['name', 'engine_type', 'id', 'source_id'],
+    title: 'ParserPublic',
+    description: 'Parser properties returned via API'
+} as const;
+
+export const ParserUpdateSchema = {
+    properties: {
+        name: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 255,
+                    minLength: 1
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Name'
+        },
+        engine_type: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/ParserEngineType'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        rules: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Rules'
+        },
+        is_active: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Is Active'
+        }
+    },
+    type: 'object',
+    title: 'ParserUpdate',
+    description: 'Properties for parser update'
+} as const;
+
+export const ParsersPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/ParserPublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'ParsersPublic',
+    description: 'List of parsers with count'
+} as const;
+
 export const PrivateUserCreateSchema = {
     properties: {
         email: {
@@ -235,6 +855,419 @@ export const PrivateUserCreateSchema = {
     type: 'object',
     required: ['email', 'password', 'full_name'],
     title: 'PrivateUserCreate'
+} as const;
+
+export const RecordPublicSchema = {
+    properties: {
+        date: {
+            type: 'string',
+            format: 'date',
+            title: 'Date'
+        },
+        status: {
+            '$ref': '#/components/schemas/RecordStatus',
+            default: 'pending'
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        source_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Source Id'
+        },
+        workflow_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Workflow Id'
+        },
+        data: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Data'
+        },
+        file_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Path'
+        },
+        file_hash: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Hash'
+        },
+        unique_key: {
+            type: 'string',
+            title: 'Unique Key'
+        },
+        error_context: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Context'
+        }
+    },
+    type: 'object',
+    required: ['date', 'id', 'source_id', 'workflow_id', 'unique_key'],
+    title: 'RecordPublic',
+    description: 'Record properties returned via API'
+} as const;
+
+export const RecordStatusSchema = {
+    type: 'string',
+    enum: ['pending', 'processing', 'success', 'failed', 'exported'],
+    title: 'RecordStatus',
+    description: 'Status of a record'
+} as const;
+
+export const RecordUpdateSchema = {
+    properties: {
+        status: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/RecordStatus'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        data: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Data'
+        },
+        file_path: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 500
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Path'
+        },
+        file_hash: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 64
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'File Hash'
+        },
+        error_context: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Context'
+        }
+    },
+    type: 'object',
+    title: 'RecordUpdate',
+    description: 'Properties for record update'
+} as const;
+
+export const RecordsPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/RecordPublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'RecordsPublic',
+    description: 'List of records with count'
+} as const;
+
+export const SourceCreateSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        type: {
+            '$ref': '#/components/schemas/SourceType'
+        },
+        crontab: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 100
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Crontab'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: true
+        },
+        workflow_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Workflow Id'
+        },
+        config: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Config'
+        }
+    },
+    type: 'object',
+    required: ['name', 'type', 'workflow_id'],
+    title: 'SourceCreate',
+    description: 'Properties for source creation'
+} as const;
+
+export const SourcePublicSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        type: {
+            '$ref': '#/components/schemas/SourceType'
+        },
+        crontab: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 100
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Crontab'
+        },
+        is_active: {
+            type: 'boolean',
+            title: 'Is Active',
+            default: true
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        workflow_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Workflow Id'
+        },
+        config: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Config'
+        },
+        sync_cursor: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Sync Cursor'
+        },
+        last_sync_at: {
+            anyOf: [
+                {
+                    type: 'string',
+                    format: 'date-time'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Last Sync At'
+        },
+        error_context: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error Context'
+        }
+    },
+    type: 'object',
+    required: ['name', 'type', 'id', 'workflow_id'],
+    title: 'SourcePublic',
+    description: 'Source properties returned via API'
+} as const;
+
+export const SourceTypeSchema = {
+    type: 'string',
+    enum: ['gmail', 'xls', 'free', 'free_mobile'],
+    title: 'SourceType',
+    description: 'Types of invoice sources'
+} as const;
+
+export const SourceUpdateSchema = {
+    properties: {
+        name: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 255,
+                    minLength: 1
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Name'
+        },
+        type: {
+            anyOf: [
+                {
+                    '$ref': '#/components/schemas/SourceType'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        config: {
+            anyOf: [
+                {
+                    additionalProperties: true,
+                    type: 'object'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Config'
+        },
+        crontab: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 100
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Crontab'
+        },
+        is_active: {
+            anyOf: [
+                {
+                    type: 'boolean'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Is Active'
+        }
+    },
+    type: 'object',
+    title: 'SourceUpdate',
+    description: 'Properties for source update'
+} as const;
+
+export const SourcesPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/SourcePublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'SourcesPublic',
+    description: 'List of sources with count'
 } as const;
 
 export const TokenSchema = {
@@ -523,4 +1556,85 @@ export const ValidationErrorSchema = {
     type: 'object',
     required: ['loc', 'msg', 'type'],
     title: 'ValidationError'
+} as const;
+
+export const WorkflowCreateSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        }
+    },
+    type: 'object',
+    required: ['name'],
+    title: 'WorkflowCreate',
+    description: 'Properties for workflow creation'
+} as const;
+
+export const WorkflowPublicSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            maxLength: 255,
+            minLength: 1,
+            title: 'Name'
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        user_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'User Id'
+        }
+    },
+    type: 'object',
+    required: ['name', 'id', 'user_id'],
+    title: 'WorkflowPublic',
+    description: 'Workflow properties returned via API'
+} as const;
+
+export const WorkflowUpdateSchema = {
+    properties: {
+        name: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 255,
+                    minLength: 1
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Name'
+        }
+    },
+    type: 'object',
+    title: 'WorkflowUpdate',
+    description: 'Properties for workflow update'
+} as const;
+
+export const WorkflowsPublicSchema = {
+    properties: {
+        data: {
+            items: {
+                '$ref': '#/components/schemas/WorkflowPublic'
+            },
+            type: 'array',
+            title: 'Data'
+        },
+        count: {
+            type: 'integer',
+            title: 'Count'
+        }
+    },
+    type: 'object',
+    required: ['data', 'count'],
+    title: 'WorkflowsPublic',
+    description: 'List of workflows with count'
 } as const;
